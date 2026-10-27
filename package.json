@@ -1,0 +1,10 @@
+{
+  "name": "unified-providers",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @pont/api run build && pnpm --filter @pont/webui run build",
+    "dev:api": "pnpm --filter @pont/api run dev",
+    "dev:webui": "pnpm --filter @pont/webui run dev",
+    "test": "pnpm --filter @pont/api run test"
+  }
+}

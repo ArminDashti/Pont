@@ -1,3 +1,10 @@
+node_modules/
+dist/
+data/
+openvpn/*.ovpn
+openvpn/auth.txt
+.env
+
 .agents/
 .cursor/mcp.json
 .cursor/hooks/

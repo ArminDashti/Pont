@@ -1,0 +1,41 @@
+name: pont
+
+services:
+  pont-api:
+    build:
+      context: .
+      dockerfile: pont-api/Dockerfile
+    image: pont-api:local
+    ports:
+      - "9880:9880"
+    environment:
+      PONT_OPENVPN_SKIP: "1"
+      PONT_PORT: "9880"
+      PONT_WEBUI_ORIGIN: "http://127.0.0.1:9881"
+      PONT_ADMIN_JWT_SECRET: "${PONT_ADMIN_JWT_SECRET:-dev-change-me-pont-jwt-secret}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      OPENCODE_GO_API_KEY: "${OPENCODE_GO_API_KEY:-}"
+    volumes:
+      - pont-data:/data
+      - ./openvpn:/etc/openvpn/pont:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9880/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  pont-webui:
+    build:
+      context: .
+      dockerfile: pont-webui/Dockerfile
+    image: pont-webui:local
+    ports:
+      - "9881:80"
+    depends_on:
+      pont-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pont-data:

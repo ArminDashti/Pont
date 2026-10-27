@@ -1,0 +1,36 @@
+import { describe, expect, it } from 'vitest';
+
+import { SettingsRepository } from '../store/settings.repository.js';
+import { GatewayDatabase } from '../store/gateway-database.js';
+import { ConfigService } from '@nestjs/config';
+import { pontConfigKey } from '../config/pont.config.js';
+import { EligibleModelsService } from './eligible-models.service.js';
+
+function createService(): EligibleModelsService {
+  const config = {
+    getOrThrow: (key: string) => {
+      if (key !== pontConfigKey) {
+        throw new Error(key);
+      }
+      return { dbPath: ':memory:' };
+    },
+  } as ConfigService;
+  const db = new GatewayDatabase(config);
+  return new EligibleModelsService(new SettingsRepository(db));
+}
+
+describe('EligibleModelsService', () => {
+  it('defaults to OpenCode Go models only', () => {
+    const service = createService();
+    expect(service.isEnabled('opencode-deepseek-4-1-free')).toBe(true);
+    expect(service.isEnabled('openrouter-openai/gpt-4o-mini')).toBe(false);
+    expect(service.explicitEnabled()).toBeNull();
+  });
+
+  it('honors an explicit allowlist after save', () => {
+    const service = createService();
+    service.setEnabled(['openrouter-openai/gpt-4o-mini']);
+    expect(service.isEnabled('openrouter-openai/gpt-4o-mini')).toBe(true);
+    expect(service.isEnabled('opencode-deepseek-4-1-free')).toBe(false);
+  });
+});
