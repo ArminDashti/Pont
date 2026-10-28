@@ -11,6 +11,7 @@ import { RequestLogRepository } from './request-log.repository.js';
 import { SettingsRepository } from './settings.repository.js';
 import { BootstrapService } from './bootstrap.service.js';
 import { UsersRepository } from './users.repository.js';
+import { UserModelsRepository } from './user-models.repository.js';
 
 @Module({
   imports: [ProviderCatalogModule],
@@ -21,6 +22,7 @@ import { UsersRepository } from './users.repository.js';
     RequestEventsService,
     ProviderKeysService,
     ServicesService,
+    UserModelsRepository,
     EligibleModelsService,
     UsersRepository,
     UsersService,

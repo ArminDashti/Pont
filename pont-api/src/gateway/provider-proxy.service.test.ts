@@ -10,6 +10,7 @@ import { EligibleModelsService } from '../settings/eligible-models.service.js';
 import type { ProviderKeysService } from '../settings/provider-keys.service.js';
 import { SettingsRepository } from '../store/settings.repository.js';
 import { GatewayDatabase } from '../store/gateway-database.js';
+import { UserModelsRepository } from '../store/user-models.repository.js';
 import type { ServicesService } from '../settings/services.service.js';
 import type { RequestLogInput, RequestLogRepository } from '../store/request-log.repository.js';
 import type { RequestEventsService } from '../store/request-events.service.js';
@@ -97,6 +98,7 @@ function createProxy(insert = vi.fn((input: RequestLogInput) => ({ ...input, id:
   const registry = new ProviderRegistry(configService);
   const eligibleModels = new EligibleModelsService(
     new SettingsRepository(new GatewayDatabase(configService)),
+    new UserModelsRepository(new GatewayDatabase(configService)),
   );
   const proxy = new ProviderProxyService(
     configService,
@@ -189,7 +191,7 @@ describe('ProviderProxyService', () => {
     const req = mockRequest(JSON.stringify({ model: 'openrouter-gpt-4o', messages: [] }));
     req.headers.authorization = 'Bearer pont_sk_test';
     await expect(proxy.proxyRoutedCompletion(req, mockResponse(), 'chat/completions')).rejects.toThrow(
-      /not eligible/,
+      /not allowed for this user|not eligible/,
     );
   });
 });

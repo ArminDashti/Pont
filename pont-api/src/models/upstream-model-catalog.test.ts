@@ -34,6 +34,18 @@ describe('catalogRowsFromModelsJson', () => {
     });
   });
 
+  it('ignores aggregator owned_by and infers OpenCode Go model creators', () => {
+    const body = JSON.stringify({
+      data: [
+        { id: 'claude-haiku-5-5', owned_by: 'opencode' },
+        { id: 'gpt-5.6-luna', owned_by: 'opencode' },
+        { id: 'deepseek-v4-pro', owned_by: 'opencode' },
+      ],
+    });
+    const rows = catalogRowsFromModelsJson(body, 'opencode-go', FREE_SLUGS);
+    expect(rows.map((row) => row.owner)).toEqual(['anthropic', 'openai', 'deepseek']);
+  });
+
   it('marks free-tier Pont ids and zero pricing', () => {
     const body = JSON.stringify({
       data: [{ id: 'deepseek/deepseek-4-1-free', name: 'DeepSeek Free', pricing: { prompt: '0', completion: '0' } }],

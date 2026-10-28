@@ -119,7 +119,7 @@ export class ProviderProxyService {
       provider.id === 'opencode-go'
         ? openCodeGoUpstreamUrl(provider.baseUrl, 'models')
         : `${provider.baseUrl}/models`;
-    await this.forwardModelsGet(modelsUrl, provider, upstreamKey, req, res);
+    await this.forwardModelsGet(modelsUrl, provider, upstreamKey, req, res, username);
   }
 
   /** Unified `/api/v1/models`: every provider that has a key, merged into one list of Pont ids. */
@@ -158,7 +158,7 @@ export class ProviderProxyService {
     res.status(200);
     res.setHeader('Content-Type', 'application/json');
     const merged = perProvider.flat().filter((item) => {
-      return isJsonObject(item) && typeof item.id === 'string' && this.eligibleModels.isEnabled(item.id);
+      return isJsonObject(item) && typeof item.id === 'string' && this.eligibleModels.isEnabledForUser(username, item.id);
     });
     res.end(JSON.stringify({ object: 'list', data: merged }));
   }
@@ -191,7 +191,7 @@ export class ProviderProxyService {
 
     const modelName =
       isJsonObject(requestBody) && typeof requestBody.model === 'string' ? requestBody.model : undefined;
-    this.eligibleModels.assertEligible(modelName);
+    this.eligibleModels.assertEligibleForUser(username, modelName);
     const provider = providerOf(modelName);
     const upstreamKey = this.upstreamAuth.resolveUpstreamApiKey(authorization, provider);
 
@@ -378,6 +378,7 @@ export class ProviderProxyService {
     upstreamKey: string,
     req: Request,
     res: Response,
+    username: string,
   ): Promise<void> {
     const { sessionId, generated } = resolveSessionId(req.headers[SESSION_HEADER]);
     const headers = this.buildUpstreamHeaders(provider, upstreamKey, sessionId, req);
@@ -389,6 +390,7 @@ export class ProviderProxyService {
     const text = await upstream.text();
     const transformed = this.eligibleModels.filterModelsListJson(
       transformModelsListJson(text, provider.id, this.providerKeys.freeModelSlugs()),
+      username,
     );
     res.status(upstream.status);
     res.setHeader('Content-Type', 'application/json');

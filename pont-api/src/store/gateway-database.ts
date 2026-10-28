@@ -41,6 +41,12 @@ const SCHEMA = `
     gateway_api_key_hash TEXT,
     gateway_api_key_prefix TEXT NOT NULL DEFAULT ''
   );
+  CREATE TABLE IF NOT EXISTS user_model_grants (
+    username TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    PRIMARY KEY (username, model_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_model_grants_username ON user_model_grants (username);
 `;
 
 @Injectable()

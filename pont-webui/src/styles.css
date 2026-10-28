@@ -609,6 +609,21 @@ button.small {
   word-break: break-all;
 }
 
+.key-prefix {
+  font-family: var(--mono);
+  font-size: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.key-prefix:hover {
+  color: var(--text);
+}
+
 .list {
   list-style: none;
   padding: 0;

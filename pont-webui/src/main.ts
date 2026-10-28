@@ -155,6 +155,7 @@ const LEGACY_ROUTES: Record<string, string> = {
   '/admin/logs': '/logs',
   '/admin/providers': '/providers',
   '/admin/users': '/users',
+  '/api-key': '/endpoints',
 };
 
 async function render(): Promise<void> {
@@ -206,13 +207,11 @@ async function render(): Promise<void> {
   const links: Array<[string, string]> = [
     ['/', 'Overview'],
     ['/models', 'Models'],
-    ['/api-key', 'API key'],
     ['/logs', 'Request logs'],
     ['/endpoints', 'Endpoints'],
     ...(me.admin
       ? ([
           ['/providers', 'Providers'],
-          ['/eligible-models', 'Eligible models'],
           ['/users', 'Users'],
         ] as Array<[string, string]>)
       : []),
@@ -236,15 +235,13 @@ async function render(): Promise<void> {
     } else if (target === '/logs') {
       main.append(await renderLogs(me));
     } else if (target === '/models') {
-      main.append(await renderModels());
-    } else if (target === '/api-key') {
-      main.append(renderApiKey(me));
+      main.append(await renderModels(me));
     } else if (target === '/endpoints') {
       main.append(renderEndpoints(me));
     } else if (me.admin && target === '/providers') {
       main.append(await renderProviders());
-    } else if (me.admin && target === '/eligible-models') {
-      main.append(await renderEligibleModels());
+    } else if (me.admin && target === '/user-models') {
+      main.append(await renderUserModels());
     } else if (me.admin && target === '/users') {
       main.append(await renderUsers());
     } else {
@@ -390,56 +387,10 @@ async function renderOverview(me: UserRecord): Promise<HTMLElement> {
 
   const charts = el('<div class="grid-2"></div>');
   charts.append(breakdownTable('By app', stats.byApp), breakdownTable('By model', stats.byModel));
-  wrap.append(
-    await vpnPanel(),
-    el(`<p class="muted"><a href="#/api-key">API key</a> — create or rotate your gateway credential.</p>`),
-    charts,
-  );
+  wrap.append(await vpnPanel(), charts);
   if (me.admin) {
     wrap.append(breakdownTable('By user', stats.byUser));
   }
-  return wrap;
-}
-
-function renderApiKey(me: UserRecord): HTMLElement {
-  const host = (import.meta.env.VITE_PONT_API_HOST as string | undefined) ?? 'http://127.0.0.1:9880';
-  const wrap = el(`
-    <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>API key</h1>
-          <p class="muted">Gateway credential for ${esc(userDisplayName(me))}. Rotate to issue a new key; the full value is shown once.</p>
-        </div>
-      </header>
-      <div class="panel" id="key-panel">
-        <h2>Your gateway key</h2>
-        <p class="muted">Current prefix <span class="mono">${esc(me.gatewayApiKeyPrefix || 'pont_…')}</span></p>
-        <div class="field-row">
-          <button id="rotate-key">Create / rotate key</button>
-        </div>
-        <div class="secret" id="new-key" hidden></div>
-        <h3>How to call the gateway</h3>
-        <ul class="list mono">
-          <li>${esc(host)}/api/v1</li>
-          <li>${esc(host)}/openrouter/v1</li>
-          <li>${esc(host)}/zen/go/v1</li>
-        </ul>
-        <p class="muted">On <code>/api/v1</code> the model prefix picks the provider: <code>openrouter-…</code> or <code>opencode-…</code>.</p>
-        <p class="muted">Send <code>Authorization: Bearer &lt;gateway key&gt;</code>; optional header <code>x-opencode-session</code>.</p>
-      </div>
-    </div>
-  `);
-  wrap.querySelector('#rotate-key')!.addEventListener('click', async () => {
-    const result = await apiFetch<{ gatewayApiKey: string }>('/me/gateway-key/rotate', { method: 'POST' });
-    const box = wrap.querySelector('#new-key') as HTMLElement;
-    box.textContent = result.gatewayApiKey;
-    box.hidden = false;
-    try {
-      localStorage.setItem(GATEWAY_KEY_STORAGE, result.gatewayApiKey);
-    } catch {
-      // private mode
-    }
-  });
   return wrap;
 }
 
@@ -505,7 +456,7 @@ async function renderLogs(me: UserRecord): Promise<HTMLElement> {
   return wrap;
 }
 
-interface EligibleModelRow {
+interface ModelAllowlistRow {
   id: string;
   providerId: string;
   enabled: boolean;
@@ -708,7 +659,7 @@ function filterCatalogRows(
   });
 }
 
-async function renderModels(): Promise<HTMLElement> {
+async function renderModels(me: UserRecord): Promise<HTMLElement> {
   const rawProvider = queryParam('provider');
   const showAllProviders = rawProvider === 'all';
   const providerFilter = showAllProviders ? '' : (rawProvider ?? DEFAULT_MODELS_PROVIDER);
@@ -736,6 +687,7 @@ async function renderModels(): Promise<HTMLElement> {
   }
   providers.sort();
   const providerSelectValue = effectiveShowAll ? 'all' : providerFilter;
+  const colCount = 9;
 
   const sortMark = (key: CatalogSortKey): string => {
     if (sortKey !== key) {
@@ -763,7 +715,7 @@ async function renderModels(): Promise<HTMLElement> {
       <header class="page-head">
         <div>
           <h1>Models</h1>
-          <p class="muted">Models from providers with an API key. Gateway use requires enabling models under Admin → Eligible models. Prices are upstream USD per token (shown per 1M).</p>
+          <p class="muted">Catalog from providers with an API key. Prices are upstream USD per token (shown per 1M).</p>
         </div>
       </header>
       <div class="panel panel--flush-table">
@@ -826,23 +778,23 @@ async function renderModels(): Promise<HTMLElement> {
       msg =
         'No OpenCode Go models in catalog. Add an OpenCode Go API key under Admin → Providers, or set Provider to All providers.';
     }
-    tbody.append(el(`<tr><td colspan="9" class="muted">${msg}</td></tr>`));
+    tbody.append(el(`<tr><td colspan="${colCount}" class="muted">${msg}</td></tr>`));
   } else {
     for (const row of filtered) {
       tbody.append(
         el(`
-          <tr>
-            <td>${esc(providerLabel(row.providerId))}</td>
-            <td>${esc(catalogOwnerLabel(row.owner))}</td>
-            <td class="mono">${esc(catalogModelSlug(row))}</td>
-            <td class="mono">${esc(row.id)}</td>
-            <td class="num">${esc(formatContextLength(row.contextLength))}</td>
-            <td class="num mono">${esc(pricePerMillionUsd(row.inputToken))}</td>
-            <td class="num mono">${esc(pricePerMillionUsd(row.inputCacheToken))}</td>
-            <td class="num mono">${esc(pricePerMillionUsd(row.outputToken))}</td>
-            <td class="num mono">${esc(pricePerMillionUsd(row.outputCacheToken))}</td>
-          </tr>
-        `),
+        <tr>
+          <td>${esc(providerLabel(row.providerId))}</td>
+          <td>${esc(catalogOwnerLabel(row.owner))}</td>
+          <td class="mono">${esc(catalogModelSlug(row))}</td>
+          <td class="mono">${esc(row.id)}</td>
+          <td class="num">${esc(formatContextLength(row.contextLength))}</td>
+          <td class="num mono">${esc(pricePerMillionUsd(row.inputToken))}</td>
+          <td class="num mono">${esc(pricePerMillionUsd(row.inputCacheToken))}</td>
+          <td class="num mono">${esc(pricePerMillionUsd(row.outputToken))}</td>
+          <td class="num mono">${esc(pricePerMillionUsd(row.outputCacheToken))}</td>
+        </tr>
+      `),
       );
     }
   }
@@ -884,12 +836,23 @@ async function renderModels(): Promise<HTMLElement> {
   return wrap;
 }
 
-async function renderEligibleModels(): Promise<HTMLElement> {
+function userModelsRoute(username: string): string {
+  return `/user-models?username=${encodeURIComponent(username)}`;
+}
+
+async function renderUserModels(): Promise<HTMLElement> {
+  const username = queryParam('username')?.trim() ?? '';
+  if (!username) {
+    return el(
+      '<section class="panel"><h1>User models</h1><p class="muted">Pick a user from the Users page.</p></section>',
+    );
+  }
+
   const showAllProviders = queryParam('all') === '1';
-  const { customized, models } = await apiFetch<{ customized: boolean; models: EligibleModelRow[] }>(
-    '/eligible-models',
+  const { customized, models } = await apiFetch<{ customized: boolean; models: ModelAllowlistRow[] }>(
+    `/users/${encodeURIComponent(username)}/models`,
   );
-  const byProvider = new Map<string, EligibleModelRow[]>();
+  const byProvider = new Map<string, ModelAllowlistRow[]>();
   for (const row of models) {
     const list = byProvider.get(row.providerId) ?? [];
     list.push(row);
@@ -904,17 +867,20 @@ async function renderEligibleModels(): Promise<HTMLElement> {
     <div class="page">
       <header class="page-head">
         <div>
-          <h1>Eligible models</h1>
-          <p class="muted">Gateway allowlist. Until you save, only OpenCode Go models are enabled.</p>
+          <h1>Models for ${esc(username)}</h1>
+          <p class="muted">Per-user allowlist. Until you save, this user may use every model allowed on the gateway.</p>
         </div>
-        <button id="save-eligible">Save</button>
+        <div class="page-actions">
+          <a class="secondary button-link" href="#/users">Back to users</a>
+          <button id="save-user-models">Save</button>
+        </div>
       </header>
-      <div class="panel" id="eligible-panels"></div>
-      <p class="muted" id="eligible-status"></p>
+      <div class="panel" id="user-model-panels"></div>
+      <p class="muted" id="user-model-status"></p>
     </div>
   `);
 
-  const panels = wrap.querySelector('#eligible-panels')!;
+  const panels = wrap.querySelector('#user-model-panels')!;
   for (const [providerId, rows] of providerEntries) {
     const section = el(`
       <section class="eligible-group">
@@ -933,46 +899,27 @@ async function renderEligibleModels(): Promise<HTMLElement> {
         `),
       );
     }
+    if (list.childElementCount === 0) {
+      list.append(el('<p class="muted">No models in this group for this user.</p>'));
+    }
     panels.append(section);
   }
-  if (providerEntries.length === 0) {
-    const hasHiddenProviders = !customized && !showAllProviders && byProvider.size > 0;
-    panels.append(
-      el(
-        `<p class="muted">${
-          hasHiddenProviders
-            ? 'No OpenCode Go models listed. Add an OpenCode Go API key, or show other providers.'
-            : 'No models listed. Add provider API keys first.'
-        }</p>`,
-      ),
-    );
-    if (hasHiddenProviders) {
-      const showAll = el(
-        '<button type="button" class="secondary" id="eligible-show-all">Show other providers</button>',
-      );
-      showAll.addEventListener('click', () => navigate('/eligible-models?all=1'));
-      panels.append(showAll);
-    }
-  } else if (!customized && !showAllProviders && byProvider.size > providerEntries.length) {
-    const showAll = el('<button type="button" class="secondary" id="eligible-show-all">Show other providers</button>');
-    showAll.addEventListener('click', () => navigate('/eligible-models?all=1'));
-    panels.append(showAll);
-  }
 
-  const status = wrap.querySelector('#eligible-status')!;
+  const status = wrap.querySelector('#user-model-status')!;
   status.textContent = customized
-    ? 'Using your saved allowlist.'
-    : showAllProviders
-      ? 'Default allowlist: OpenCode Go only. Other providers shown so you can add them before Save.'
-      : 'Default: OpenCode Go models only (not saved yet).';
+    ? 'Using a saved per-user allowlist.'
+    : 'Default: all gateway-allowed models (not saved yet for this user).';
 
-  wrap.querySelector('#save-eligible')!.addEventListener('click', async () => {
+  wrap.querySelector('#save-user-models')!.addEventListener('click', async () => {
     const enabled = [...wrap.querySelectorAll<HTMLInputElement>('input[data-model]:checked')].map(
       (input) => input.dataset.model!,
     );
     try {
-      await apiFetch('/eligible-models', { method: 'PUT', body: JSON.stringify({ enabled }) });
-      navigate('/eligible-models');
+      await apiFetch(`/users/${encodeURIComponent(username)}/models`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
+      });
+      navigate(userModelsRoute(username));
     } catch (error) {
       status.textContent = errorText(error);
     }
@@ -1029,7 +976,8 @@ function userRow(user: UserRecord): HTMLElement {
       <td class="muted">${esc(user.email || '—')}</td>
       <td><span class="badge ${user.admin ? 'good' : ''}">${user.admin ? 'admin' : 'member'}</span></td>
       <td><span class="badge ${user.enabled ? 'good' : 'bad'}">${user.enabled ? 'enabled' : 'disabled'}</span></td>
-      <td class="mono">${esc(user.gatewayApiKeyPrefix)}</td>
+      <td><button type="button" class="key-prefix" data-show-key="${esc(user.username)}" title="Show full gateway key">${esc(user.gatewayApiKeyPrefix)}</button></td>
+      <td><a class="secondary small button-link" href="#${userModelsRoute(user.username)}">Models</a></td>
       <td><button class="secondary small" data-rotate="${esc(user.username)}">Rotate key</button></td>
     </tr>
   `);
@@ -1048,10 +996,11 @@ async function renderUsers(): Promise<HTMLElement> {
       <div class="panel">
         <table>
           <thead>
-            <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Key</th><th></th></tr>
+            <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Key</th><th>Models</th><th></th></tr>
           </thead>
           <tbody id="rows"></tbody>
         </table>
+        <p class="muted small">Click a key prefix to reveal the full gateway key (stored when the key was created or rotated).</p>
         <div class="secret" id="created-key" hidden></div>
       </div>
       <div class="panel">
@@ -1075,7 +1024,23 @@ async function renderUsers(): Promise<HTMLElement> {
   }
   const secret = wrap.querySelector('#created-key') as HTMLElement;
   tbody.addEventListener('click', async (event) => {
-    const button = (event.target as HTMLElement).closest('[data-rotate]') as HTMLElement | null;
+    const target = event.target as HTMLElement;
+    const showKey = target.closest('[data-show-key]') as HTMLElement | null;
+    if (showKey) {
+      const username = showKey.dataset.showKey!;
+      try {
+        const result = await apiFetch<{ gatewayApiKey: string }>(
+          `/users/${encodeURIComponent(username)}/gateway-key`,
+        );
+        secret.textContent = `${username} key: ${result.gatewayApiKey}`;
+        secret.hidden = false;
+      } catch (error) {
+        secret.textContent = errorText(error);
+        secret.hidden = false;
+      }
+      return;
+    }
+    const button = target.closest('[data-rotate]') as HTMLElement | null;
     if (!button) {
       return;
     }
@@ -1208,7 +1173,12 @@ const ENDPOINTS: EndpointDef[] = [
   "admin": false
 }` },
   { id: 'user-delete', group: 'Admin', method: 'DELETE', path: '/api/users/:username', base: 'api', auth: 'token', admin: true, summary: 'Delete an account.' },
+  { id: 'user-key', group: 'Admin', method: 'GET', path: '/api/users/:username/gateway-key', base: 'api', auth: 'token', admin: true, summary: "Reveal a user's stored gateway key (admin)." },
   { id: 'user-key-rotate', group: 'Admin', method: 'POST', path: '/api/users/:username/gateway-key/rotate', base: 'api', auth: 'token', admin: true, summary: "Rotate another user's gateway key." },
+  { id: 'user-models', group: 'Admin', method: 'GET', path: '/api/users/:username/models', base: 'api', auth: 'token', admin: true, summary: 'Per-user model allowlist.' },
+  { id: 'user-models-save', group: 'Admin', method: 'PUT', path: '/api/users/:username/models', base: 'api', auth: 'token', admin: true, summary: 'Save which models a user may call.', body: `{
+  "enabled": ["opencode-deepseek-4-1-free"]
+}` },
   { id: 'providers', group: 'Admin', method: 'GET', path: '/api/providers', base: 'api', auth: 'token', admin: true, summary: 'Provider key status.' },
   { id: 'provider-key', group: 'Admin', method: 'PUT', path: '/api/providers/:id', base: 'api', auth: 'token', admin: true, summary: 'Set or clear a provider key.', body: `{
   "apiKey": ""
@@ -1217,10 +1187,6 @@ const ENDPOINTS: EndpointDef[] = [
   { id: 'provider-models', group: 'Admin', method: 'GET', path: '/api/providers/:id/models', base: 'api', auth: 'token', admin: true, summary: 'Live model list from a provider.' },
   { id: 'provider-test', group: 'Admin', method: 'POST', path: '/api/providers/:id/test', base: 'api', auth: 'token', admin: true, summary: 'Send a test chat through a provider.', body: `{
   "model": "opencode-<model-slug>"
-}` },
-  { id: 'eligible-models', group: 'Admin', method: 'GET', path: '/api/eligible-models', base: 'api', auth: 'token', admin: true, summary: 'Catalog models with enabled flags (default: OpenCode Go only).' },
-  { id: 'eligible-models-save', group: 'Admin', method: 'PUT', path: '/api/eligible-models', base: 'api', auth: 'token', admin: true, summary: 'Save the gateway model allowlist.', body: `{
-  "enabled": ["opencode-deepseek-4-1-free"]
 }` },
 ];
 

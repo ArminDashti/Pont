@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   MessageEvent,
+  NotFoundException,
   Param,
   Post,
   Put,
@@ -120,6 +121,12 @@ export class ApiController {
     return { username };
   }
 
+  @Get('users/:username/gateway-key')
+  revealUserKey(@Req() req: Request, @Param('username') username: string): { gatewayApiKey: string } {
+    this.auth.assertAdmin(req.headers.authorization);
+    return { gatewayApiKey: this.users.getGatewayKey(username) };
+  }
+
   @Post('users/:username/gateway-key/rotate')
   async rotateUserKey(
     @Req() req: Request,
@@ -202,15 +209,14 @@ export class ApiController {
 
   @Get('models')
   async listModelsCatalog(@Req() req: Request): Promise<{ models: CatalogModelRow[] }> {
-    this.auth.assertUser(req.headers.authorization);
-    return { models: await this.modelsCatalog.listCatalog() };
+    const { username } = this.auth.assertUser(req.headers.authorization);
+    const catalog = await this.modelsCatalog.listCatalog();
+    return {
+      models: catalog.filter((row) => this.eligibleModels.isEnabledForUser(username, row.id)),
+    };
   }
 
-  @Get('eligible-models')
-  async listEligibleModels(
-    @Req() req: Request,
-  ): Promise<{ customized: boolean; models: EligibleModelRow[] }> {
-    this.auth.assertAdmin(req.headers.authorization);
+  private async buildPontModelCatalog(): Promise<Array<{ id: string; providerId: ProviderId }>> {
     const catalog: Array<{ id: string; providerId: ProviderId }> = [];
     for (const provider of this.registry.list()) {
       if (!this.providerKeys.getKey(provider.id)) {
@@ -226,15 +232,31 @@ export class ApiController {
       }
     }
     catalog.sort((a, b) => a.id.localeCompare(b.id));
+    return catalog;
+  }
+
+  @Get('users/:username/models')
+  async listUserModels(
+    @Req() req: Request,
+    @Param('username') username: string,
+  ): Promise<{ customized: boolean; models: EligibleModelRow[] }> {
+    this.auth.assertAdmin(req.headers.authorization);
+    if (!this.users.find(username)) {
+      throw new NotFoundException(`Unknown user "${username}"`);
+    }
+    const catalog = await this.buildPontModelCatalog();
     return {
-      customized: this.eligibleModels.explicitEnabled() !== null,
-      models: this.eligibleModels.rowsForCatalog(catalog),
+      customized: this.eligibleModels.userAssignmentCustomized(username),
+      models: this.eligibleModels.rowsForUserCatalog(username, catalog),
     };
   }
 
-  @Put('eligible-models')
-  async setEligibleModels(@Req() req: Request): Promise<{ enabled: string[] }> {
+  @Put('users/:username/models')
+  async setUserModels(@Req() req: Request, @Param('username') username: string): Promise<{ enabled: string[] }> {
     this.auth.assertAdmin(req.headers.authorization);
+    if (!this.users.find(username)) {
+      throw new NotFoundException(`Unknown user "${username}"`);
+    }
     const body = await readJsonBody(req);
     if (!isJsonObject(body) || !Array.isArray(body.enabled)) {
       throw new BadRequestException('Body must include array "enabled" of Pont model ids');
@@ -246,7 +268,7 @@ export class ApiController {
       }
       enabled.push(item);
     }
-    return { enabled: this.eligibleModels.setEnabled(enabled) };
+    return { enabled: this.eligibleModels.setUserEnabled(username, enabled) };
   }
 
   private async optionalModel(req: Request): Promise<string | undefined> {

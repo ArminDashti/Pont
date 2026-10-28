@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { GatewayDatabase } from '../store/gateway-database.js';
+import { SettingsRepository } from '../store/settings.repository.js';
+import { UserModelsRepository } from '../store/user-models.repository.js';
 import { UsersRepository } from '../store/users.repository.js';
 import { UsersService } from '../settings/users.service.js';
 import { ApiAuthService } from './api-auth.service.js';
@@ -16,7 +18,11 @@ describe('ApiAuthService', () => {
 
   beforeEach(() => {
     const database = new GatewayDatabase(config as never);
-    users = new UsersService(new UsersRepository(database));
+    users = new UsersService(
+      new UsersRepository(database),
+      new UserModelsRepository(database),
+      new SettingsRepository(database),
+    );
     service = new ApiAuthService(config as never, users);
   });
 

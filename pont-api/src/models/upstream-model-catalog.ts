@@ -53,14 +53,78 @@ function contextLengthFrom(item: Record<string, unknown>): number | null {
   return null;
 }
 
+const AGGREGATOR_OWNERS = new Set(['opencode', 'openrouter', 'system']);
+
+const CREATOR_BY_SLUG_PREFIX: Record<string, string> = {
+  claude: 'anthropic',
+  gpt: 'openai',
+  grok: 'xai',
+  gemini: 'google',
+  glm: 'zhipu',
+  deepseek: 'deepseek',
+  kimi: 'moonshot',
+  minimax: 'minimax',
+  hy: 'tencent',
+  step: 'stepfun',
+  longcat: 'meituan',
+  mimo: 'xiaomi',
+};
+
+function slugPrefix(upstreamId: string): string {
+  const base = upstreamId.replace(/^~+/, '').trim();
+  const slash = base.lastIndexOf('/');
+  const tail = slash >= 0 ? base.slice(slash + 1) : base;
+  const hyphen = tail.indexOf('-');
+  return (hyphen >= 0 ? tail.slice(0, hyphen) : tail).toLowerCase();
+}
+
+function creatorFromUpstreamSlug(upstreamId: string): string {
+  const prefix = slugPrefix(upstreamId);
+  const mapped = CREATOR_BY_SLUG_PREFIX[prefix];
+  if (mapped) {
+    return mapped;
+  }
+  if (prefix.startsWith('qwen')) {
+    return 'qwen';
+  }
+  if (prefix.startsWith('hy')) {
+    return 'tencent';
+  }
+  return prefix || upstreamId;
+}
+
 function ownerFrom(upstreamId: string, item: Record<string, unknown>, providerId: ProviderId): string {
-  if (typeof item.owned_by === 'string' && item.owned_by.trim()) {
-    return item.owned_by.trim();
-  }
   if (upstreamId.includes('/')) {
-    return upstreamId.split('/')[0]!;
+    return upstreamId.split('/')[0]!.replace(/^~+/, '').trim();
   }
-  return providerId;
+  const ownedBy = typeof item.owned_by === 'string' ? item.owned_by.trim() : '';
+  if (
+    ownedBy &&
+    !AGGREGATOR_OWNERS.has(ownedBy.toLowerCase()) &&
+    ownedBy !== providerId
+  ) {
+    return ownedBy;
+  }
+  const fromName = creatorFromModelName(item.name);
+  if (fromName) {
+    return fromName;
+  }
+  return creatorFromUpstreamSlug(upstreamId);
+}
+
+function creatorFromModelName(name: unknown): string | null {
+  if (typeof name !== 'string') {
+    return null;
+  }
+  const match = name.trim().match(/^([^:]+):/);
+  if (!match) {
+    return null;
+  }
+  const label = match[1]!.trim();
+  if (!label) {
+    return null;
+  }
+  return label.replace(/\s+/g, ' ').split(' ')[0]!.toLowerCase();
 }
 
 function pricingLooksFree(pricing: Record<string, unknown>): boolean {

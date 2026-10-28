@@ -13,7 +13,9 @@ import {
   verifyGatewayApiKey,
 } from '../auth/gateway-api-key.js';
 import { isJsonObject } from '../http/read-json-body.js';
+import { SettingsRepository } from '../store/settings.repository.js';
 import { type UserRecord, UsersRepository } from '../store/users.repository.js';
+import { UserModelsRepository } from '../store/user-models.repository.js';
 import { hashPassword, verifyPassword } from './password.js';
 
 const TEXT_FIELDS = ['email', 'firstName', 'lastName'] as const;
@@ -31,7 +33,11 @@ export interface CreateUserResult {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly users: UsersRepository) {}
+  constructor(
+    private readonly users: UsersRepository,
+    private readonly userModels: UserModelsRepository,
+    private readonly settings: SettingsRepository,
+  ) {}
 
   list(): UserRecord[] {
     return this.users.list();
@@ -55,6 +61,7 @@ export class UsersService {
     const keyHash = hashGatewayApiKey(gatewayApiKey);
     const prefix = gatewayKeyPrefix(gatewayApiKey);
     this.users.insert(record, passwordHash, keyHash, prefix);
+    this.storeGatewayKeySecret(username, gatewayApiKey);
     return { user: record, gatewayApiKey };
   }
 
@@ -83,6 +90,8 @@ export class UsersService {
     if (!this.users.findByUsername(username)) {
       throw new NotFoundException(`Unknown user "${username}"`);
     }
+    this.userModels.deleteForUser(username);
+    this.settings.delete(this.gatewayKeyStorageKey(username));
     this.users.delete(username);
   }
 
@@ -105,7 +114,20 @@ export class UsersService {
     const keyHash = hashGatewayApiKey(gatewayApiKey);
     const prefix = gatewayKeyPrefix(gatewayApiKey);
     this.users.setGatewayKey(username, keyHash, prefix);
+    this.storeGatewayKeySecret(username, gatewayApiKey);
     return { gatewayApiKey, prefix };
+  }
+
+  getGatewayKey(username: string): string {
+    const user = this.users.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`Unknown user "${username}"`);
+    }
+    const key = this.settings.get(this.gatewayKeyStorageKey(username));
+    if (!key) {
+      throw new NotFoundException(`Gateway key for "${username}" is not stored; rotate to issue a new key.`);
+    }
+    return key;
   }
 
   resolveUsernameFromGatewayKey(key: string): string | undefined {
@@ -123,6 +145,14 @@ export class UsersService {
       return undefined;
     }
     return username;
+  }
+
+  private gatewayKeyStorageKey(username: string): string {
+    return `user.${username}.gatewayApiKey`;
+  }
+
+  private storeGatewayKeySecret(username: string, gatewayApiKey: string): void {
+    this.settings.set(this.gatewayKeyStorageKey(username), gatewayApiKey);
   }
 
   private parseUsername(raw: unknown): string {
