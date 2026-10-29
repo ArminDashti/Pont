@@ -1,0 +1,69 @@
+/*
+ * Cursor theme (source: Cursor's built-in "Cursor Dark" and "Cursor Light" editor themes,
+ * resources/app/extensions/theme-cursor/themes/*.json). Editor color keys mapped to web tokens.
+ * Dark = :root / .dark, Light = .light. Hex values may carry alpha (#RRGGBBAA).
+ */
+:root,
+.dark {
+  color-scheme: dark;
+  /* Surfaces */
+  --bg: #181818;               /* editor.background: main content */
+  --bg-chrome: #141414;        /* sideBar / activityBar / titleBar / statusBar / panel */
+  --bg-elevated: #141414;      /* editorWidget / notifications / menus */
+  --bg-input: #F0F0F00A;       /* input.background */
+  --bg-hover: #F0F0F011;       /* list.hoverBackground */
+  --bg-selected: #F0F0F01E;    /* list.activeSelectionBackground */
+  /* Text */
+  --fg: #F0F0F0;               /* foreground / editor.foreground */
+  --fg-muted: #F0F0F0BD;       /* sideBar.foreground */
+  --fg-placeholder: #F0F0F099; /* input.placeholderForeground */
+  /* Lines */
+  --border: #F0F0F013;         /* sideBar.border / panel.border / input.border */
+  --focus-ring: #F0F0F026;     /* focusBorder */
+  /* Actions */
+  --primary: #81A1C1;          /* button.background */
+  --primary-fg: #191C22;       /* button.foreground */
+  --primary-hover: #87A6C4;    /* button.hoverBackground */
+  --secondary: #626262;        /* button.secondaryBackground */
+  --secondary-fg: #F0F0F0;
+  --link: #81A1C1;             /* textLink.foreground */
+  --badge: #88C0D0;
+  --badge-fg: #141414;
+  /* Status */
+  --success: #3FA266;          /* progressBar / terminal.ansiGreen */
+  --warning: #F1B467;          /* editorWarning.foreground */
+  --danger: #E34671;           /* errorForeground */
+  --info: #81A1C1;
+  /* Scrollbar */
+  --scrollbar-thumb: #F0F0F011;
+  --scrollbar-thumb-hover: #F0F0F01E;
+}
+
+.light {
+  color-scheme: light;
+  --bg: #FCFCFC;
+  --bg-chrome: #F3F3F3;
+  --bg-elevated: #F3F3F3;
+  --bg-input: #FCFCFC;
+  --bg-hover: #14141414;
+  --bg-selected: #14141414;
+  --fg: #141414;
+  --fg-muted: #141414BD;
+  --fg-placeholder: #1414145C;
+  --border: #14141414;
+  --focus-ring: #14141433;
+  --primary: #2778C1;
+  --primary-fg: #FCFCFC;
+  --primary-hover: #246AAB;
+  --secondary: #14141424;
+  --secondary-fg: #141414;
+  --link: #0064B0;
+  --badge: #F3F3F3;
+  --badge-fg: #141414A8;
+  --success: #007041;
+  --warning: #CD4500;
+  --danger: #BE1744;
+  --info: #0064B0;
+  --scrollbar-thumb: #14141424;
+  --scrollbar-thumb-hover: #14141433;
+}

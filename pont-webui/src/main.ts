@@ -54,7 +54,24 @@ interface VpnStatus {
 }
 
 const PAGE_SIZE = 50;
+const SIDEBAR_COLLAPSED_KEY = 'pont.sidebarCollapsed';
 const app = document.querySelector<HTMLDivElement>('#app')!;
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeSidebarCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {
+    /* private mode */
+  }
+}
 
 function el(html: string): HTMLElement {
   const template = document.createElement('template');
@@ -70,7 +87,7 @@ function esc(value: unknown): string {
 function brandIconHtml(): string {
   return `<picture class="brand-mark">
     <source media="(prefers-color-scheme: light)" srcset="${import.meta.env.BASE_URL}brand/light-icon.png" />
-    <img src="${import.meta.env.BASE_URL}brand/dark-icon.png" alt="" width="28" height="28" decoding="async" />
+    <img src="${import.meta.env.BASE_URL}brand/dark-icon.png" alt="" width="40" height="40" decoding="async" />
   </picture>`;
 }
 
@@ -121,7 +138,7 @@ function modelsRoute(params: {
     search.set('dir', params.dir);
   }
   const qs = search.toString();
-  return qs ? `/models?${qs}` : '/models';
+  return qs ? `/providers?${qs}` : '/providers';
 }
 
 function navigate(path: string): void {
@@ -145,7 +162,16 @@ function compact(value: number): string {
 
 function time(iso: string): string {
   const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const mi = String(date.getMinutes()).padStart(2, '0');
+  const s = String(date.getSeconds()).padStart(2, '0');
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
 }
 
 /** Old `#/admin/...` bookmarks land on the new top-level routes. */
@@ -156,6 +182,7 @@ const LEGACY_ROUTES: Record<string, string> = {
   '/admin/providers': '/providers',
   '/admin/users': '/users',
   '/api-key': '/endpoints',
+  '/models': '/providers',
 };
 
 async function render(): Promise<void> {
@@ -183,15 +210,20 @@ async function render(): Promise<void> {
 
   const target = LEGACY_ROUTES[path] ?? path;
   if (target !== path) {
-    // Keep the address bar clean for old `#/admin/...` bookmarks.
-    history.replaceState(null, '', target === '/' ? location.pathname : `#${target}`);
+    const query = location.hash.split('?')[1];
+    const hash = target === '/' ? '' : `#${target}${query ? `?${query}` : ''}`;
+    history.replaceState(null, '', hash || location.pathname);
   }
   document.title = `Pont · ${userDisplayName(me)}`;
 
+  const sidebarCollapsed = readSidebarCollapsed();
   const shell = el(`
-    <div class="shell">
+    <div class="shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div class="brand" title="Pont">${brandIconHtml()}</div>
+        <div class="sidebar-head">
+          <div class="brand" title="Pont">${brandIconHtml()}</div>
+          <button type="button" class="sidebar-toggle secondary small" id="sidebar-toggle" aria-expanded="${sidebarCollapsed ? 'false' : 'true'}" aria-label="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}" title="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">${sidebarCollapsed ? '»' : '«'}</button>
+        </div>
         <nav class="nav" id="nav"></nav>
         <div class="account">
           <div class="account-name">${esc(userDisplayName(me))}</div>
@@ -206,21 +238,29 @@ async function render(): Promise<void> {
 
   const links: Array<[string, string]> = [
     ['/', 'Overview'],
-    ['/models', 'Models'],
-    ['/logs', 'Request logs'],
+    ['/providers', 'Providers'],
+    ['/logs', 'Logs'],
     ['/endpoints', 'Endpoints'],
-    ...(me.admin
-      ? ([
-          ['/providers', 'Providers'],
-          ['/users', 'Users'],
-        ] as Array<[string, string]>)
-      : []),
+    ...(me.admin ? ([['/users', 'Users']] as Array<[string, string]>) : []),
   ];
   const nav = shell.querySelector('#nav')!;
+  const navActive = target === '/user-models' ? '/users' : target;
   for (const [href, label] of links) {
-    const link = el(`<a class="nav-link${target === href ? ' active' : ''}" href="#${href}">${label}</a>`);
+    const link = el(
+      `<a class="nav-link${navActive === href ? ' active' : ''}" href="#${href}" title="${esc(label)}"><span class="nav-link-full">${esc(label)}</span><span class="nav-link-abbr" aria-hidden="true">${esc(label.charAt(0))}</span></a>`,
+    );
     nav.append(link);
   }
+  const shellRoot = shell as HTMLDivElement;
+  shell.querySelector('#sidebar-toggle')!.addEventListener('click', () => {
+    const collapsed = shellRoot.classList.toggle('sidebar-collapsed');
+    writeSidebarCollapsed(collapsed);
+    const toggle = shell.querySelector('#sidebar-toggle') as HTMLButtonElement;
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.textContent = collapsed ? '»' : '«';
+  });
   shell.querySelector('#logout')!.addEventListener('click', () => {
     setToken(null);
     navigate('/login');
@@ -234,16 +274,14 @@ async function render(): Promise<void> {
       main.append(await renderOverview(me));
     } else if (target === '/logs') {
       main.append(await renderLogs(me));
-    } else if (target === '/models') {
-      main.append(await renderModels(me));
     } else if (target === '/endpoints') {
-      main.append(renderEndpoints(me));
-    } else if (me.admin && target === '/providers') {
-      main.append(await renderProviders());
-    } else if (me.admin && target === '/user-models') {
-      main.append(await renderUserModels());
-    } else if (me.admin && target === '/users') {
-      main.append(await renderUsers());
+      main.append(renderEndpoints());
+    } else if (target === '/providers') {
+      main.append(await renderProvidersPage(me));
+    } else if (me.admin && (target === '/users' || target === '/user-models')) {
+      const modelsUsername =
+        target === '/user-models' ? queryParam('username')?.trim() || undefined : undefined;
+      main.append(await renderUsers(modelsUsername));
     } else {
       main.append(el('<section class="panel"><h1>Not found</h1><p class="muted">No such page.</p></section>'));
     }
@@ -283,6 +321,11 @@ function renderLogin(): HTMLElement {
         body: JSON.stringify({ username, password }),
       });
       setToken(result.token);
+      void fetchSignedInGatewayKey().then((key) => {
+        if (key) {
+          persistGatewayKey(key);
+        }
+      });
       navigate('/');
     } catch {
       errorEl.textContent = 'Invalid username or password';
@@ -430,12 +473,6 @@ async function renderLogs(me: UserRecord): Promise<HTMLElement> {
   const { items, total } = await apiFetch<{ items: LogRecord[]; total: number }>(`/logs?limit=${PAGE_SIZE}&offset=${offset}`);
   const wrap = el(`
     <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>Request logs</h1>
-          <p class="muted">${me.admin ? `${num(total)} requests from all users.` : `${num(total)} of your own requests.`}</p>
-        </div>
-      </header>
       <div class="panel"></div>
     </div>
   `);
@@ -484,6 +521,10 @@ function providerLabel(id: string): string {
   return PROVIDER_LABELS[id] ?? id;
 }
 
+function trimDecimalZeros(value: string): string {
+  return value.includes('.') ? value.replace(/\.?0+$/, '') : value;
+}
+
 function pricePerMillionUsd(raw: string | null): string {
   if (!raw) {
     return '—';
@@ -493,16 +534,22 @@ function pricePerMillionUsd(raw: string | null): string {
     return raw;
   }
   if (perToken === 0) {
-    return '$0';
+    return '0';
   }
   const perMillion = perToken * 1_000_000;
   if (perMillion >= 1) {
-    return `$${perMillion.toFixed(2)}/M`;
+    return trimDecimalZeros(perMillion.toFixed(2));
   }
   if (perMillion >= 0.01) {
-    return `$${perMillion.toFixed(3)}/M`;
+    return trimDecimalZeros(perMillion.toFixed(3));
   }
-  return `$${perMillion.toExponential(2)}/M`;
+  for (let decimals = 4; decimals <= 10; decimals++) {
+    const formatted = trimDecimalZeros(perMillion.toFixed(decimals));
+    if (Number(formatted) !== 0) {
+      return formatted;
+    }
+  }
+  return trimDecimalZeros(perMillion.toFixed(10));
 }
 
 type CatalogSortKey =
@@ -560,6 +607,15 @@ function catalogOwnerLabel(owner: string): string {
     return owner;
   }
   return bare.charAt(0).toUpperCase() + bare.slice(1).toLowerCase();
+}
+
+function catalogRowIsFreeById(id: string): boolean {
+  return id.toLowerCase().includes('free');
+}
+
+function catalogIdCell(row: CatalogModelRow): string {
+  const badge = catalogRowIsFreeById(row.id) ? '<span class="badge good">free</span>' : '';
+  return `<span class="id-cell"><span class="mono id-cell__id">${esc(row.id)}</span>${badge}</span>`;
 }
 
 function formatContextLength(value: number | null): string {
@@ -644,10 +700,10 @@ function filterCatalogRows(
     if (filters.provider && row.providerId !== filters.provider) {
       return false;
     }
-    if (filters.free === '1' && !row.free) {
+    if (filters.free === '1' && !catalogRowIsFreeById(row.id)) {
       return false;
     }
-    if (filters.free === '0' && row.free) {
+    if (filters.free === '0' && catalogRowIsFreeById(row.id)) {
       return false;
     }
     if (!q) {
@@ -659,7 +715,7 @@ function filterCatalogRows(
   });
 }
 
-async function renderModels(me: UserRecord): Promise<HTMLElement> {
+async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   const rawProvider = queryParam('provider');
   const showAllProviders = rawProvider === 'all';
   const providerFilter = showAllProviders ? '' : (rawProvider ?? DEFAULT_MODELS_PROVIDER);
@@ -711,13 +767,6 @@ async function renderModels(me: UserRecord): Promise<HTMLElement> {
   };
 
   const wrap = el(`
-    <div class="page page--full">
-      <header class="page-head">
-        <div>
-          <h1>Models</h1>
-          <p class="muted">Catalog from providers with an API key. Prices are upstream USD per token (shown per 1M).</p>
-        </div>
-      </header>
       <div class="panel panel--flush-table">
         <div class="filters-row">
           <label>
@@ -765,18 +814,19 @@ async function renderModels(me: UserRecord): Promise<HTMLElement> {
           </table>
         </div>
       </div>
-    </div>
   `);
 
   const tbody = wrap.querySelector('#models-rows')!;
   if (filtered.length === 0) {
     let msg = 'No models match these filters.';
     if (models.length === 0) {
-      msg =
-        'No models loaded. Add a provider API key under Admin → Providers, or check upstream connectivity.';
+      msg = isAdmin
+        ? 'No models loaded. Add a provider API key above, or check upstream connectivity.'
+        : 'No models available for your account. Ask an administrator to configure provider keys.';
     } else if (!effectiveShowAll && providerFilter === DEFAULT_MODELS_PROVIDER && !hasOpenCodeGo) {
-      msg =
-        'No OpenCode Go models in catalog. Add an OpenCode Go API key under Admin → Providers, or set Provider to All providers.';
+      msg = isAdmin
+        ? 'No OpenCode Go models in catalog. Add an OpenCode Go API key above, or set Provider to All providers.'
+        : 'No OpenCode Go models in your catalog. Try Provider → All providers, or ask an administrator to add a key.';
     }
     tbody.append(el(`<tr><td colspan="${colCount}" class="muted">${msg}</td></tr>`));
   } else {
@@ -787,7 +837,7 @@ async function renderModels(me: UserRecord): Promise<HTMLElement> {
           <td>${esc(providerLabel(row.providerId))}</td>
           <td>${esc(catalogOwnerLabel(row.owner))}</td>
           <td class="mono">${esc(catalogModelSlug(row))}</td>
-          <td class="mono">${esc(row.id)}</td>
+          <td>${catalogIdCell(row)}</td>
           <td class="num">${esc(formatContextLength(row.contextLength))}</td>
           <td class="num mono">${esc(pricePerMillionUsd(row.inputToken))}</td>
           <td class="num mono">${esc(pricePerMillionUsd(row.inputCacheToken))}</td>
@@ -840,78 +890,75 @@ function userModelsRoute(username: string): string {
   return `/user-models?username=${encodeURIComponent(username)}`;
 }
 
-async function renderUserModels(): Promise<HTMLElement> {
-  const username = queryParam('username')?.trim() ?? '';
-  if (!username) {
-    return el(
-      '<section class="panel"><h1>User models</h1><p class="muted">Pick a user from the Users page.</p></section>',
-    );
-  }
+async function openUserModelsModal(wrap: HTMLElement, username: string): Promise<void> {
+  const modal = wrap.querySelector('#user-models-modal') as HTMLElement;
+  const title = wrap.querySelector('#user-models-title')!;
+  const hint = wrap.querySelector('#user-models-hint') as HTMLElement;
+  const panels = wrap.querySelector('#user-model-panels')!;
+  const status = wrap.querySelector('#user-model-status')!;
+  const saveBtn = wrap.querySelector('#save-user-models') as HTMLButtonElement;
+
+  title.textContent = `Models for ${username}`;
+  hint.hidden = false;
+  panels.innerHTML = '<p class="muted">Loading…</p>';
+  status.textContent = '';
+  saveBtn.disabled = true;
+  modal.hidden = false;
 
   const showAllProviders = queryParam('all') === '1';
-  const { customized, models } = await apiFetch<{ customized: boolean; models: ModelAllowlistRow[] }>(
-    `/users/${encodeURIComponent(username)}/models`,
-  );
-  const byProvider = new Map<string, ModelAllowlistRow[]>();
-  for (const row of models) {
-    const list = byProvider.get(row.providerId) ?? [];
-    list.push(row);
-    byProvider.set(row.providerId, list);
-  }
-  const providerEntries =
-    customized || showAllProviders
-      ? [...byProvider.entries()]
-      : [...byProvider.entries()].filter(([providerId]) => providerId === DEFAULT_MODELS_PROVIDER);
-
-  const wrap = el(`
-    <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>Models for ${esc(username)}</h1>
-          <p class="muted">Per-user allowlist. Until you save, this user may use every model allowed on the gateway.</p>
-        </div>
-        <div class="page-actions">
-          <a class="secondary button-link" href="#/users">Back to users</a>
-          <button id="save-user-models">Save</button>
-        </div>
-      </header>
-      <div class="panel" id="user-model-panels"></div>
-      <p class="muted" id="user-model-status"></p>
-    </div>
-  `);
-
-  const panels = wrap.querySelector('#user-model-panels')!;
-  for (const [providerId, rows] of providerEntries) {
-    const section = el(`
-      <section class="eligible-group">
-        <h2>${esc(providerId)}</h2>
-        <div class="eligible-list"></div>
-      </section>
-    `);
-    const list = section.querySelector('.eligible-list')!;
-    for (const row of rows) {
-      list.append(
-        el(`
-          <label class="check eligible-row">
-            <input type="checkbox" data-model="${esc(row.id)}" ${row.enabled ? 'checked' : ''} />
-            <span class="mono">${esc(row.id)}</span>
-          </label>
-        `),
-      );
+  let customized = false;
+  try {
+    const result = await apiFetch<{ customized: boolean; models: ModelAllowlistRow[] }>(
+      `/users/${encodeURIComponent(username)}/models`,
+    );
+    customized = result.customized;
+    const byProvider = new Map<string, ModelAllowlistRow[]>();
+    for (const row of result.models) {
+      const list = byProvider.get(row.providerId) ?? [];
+      list.push(row);
+      byProvider.set(row.providerId, list);
     }
-    if (list.childElementCount === 0) {
-      list.append(el('<p class="muted">No models in this group for this user.</p>'));
+    const providerEntries =
+      customized || showAllProviders
+        ? [...byProvider.entries()]
+        : [...byProvider.entries()].filter(([providerId]) => providerId === DEFAULT_MODELS_PROVIDER);
+
+    panels.innerHTML = '';
+    for (const [providerId, rows] of providerEntries) {
+      const section = el(`
+        <section class="eligible-group">
+          <h2>${esc(providerId)}</h2>
+          <div class="eligible-list"></div>
+        </section>
+      `);
+      const list = section.querySelector('.eligible-list')!;
+      for (const row of rows) {
+        list.append(
+          el(`
+            <label class="check eligible-row">
+              <input type="checkbox" data-model="${esc(row.id)}" ${row.enabled ? 'checked' : ''} />
+              <span class="mono">${esc(row.id)}</span>
+            </label>
+          `),
+        );
+      }
+      if (list.childElementCount === 0) {
+        list.append(el('<p class="muted">No models in this group for this user.</p>'));
+      }
+      panels.append(section);
     }
-    panels.append(section);
+    status.textContent = customized
+      ? 'Using a saved per-user allowlist.'
+      : 'Default: all gateway-allowed models (not saved yet for this user).';
+  } catch (error) {
+    panels.innerHTML = `<p class="alert">${esc(errorText(error))}</p>`;
+    hint.hidden = true;
+  } finally {
+    saveBtn.disabled = false;
   }
 
-  const status = wrap.querySelector('#user-model-status')!;
-  status.textContent = customized
-    ? 'Using a saved per-user allowlist.'
-    : 'Default: all gateway-allowed models (not saved yet for this user).';
-
-  wrap.querySelector('#save-user-models')!.addEventListener('click', async () => {
-    const enabled = [...wrap.querySelectorAll<HTMLInputElement>('input[data-model]:checked')].map(
+  saveBtn.onclick = async () => {
+    const enabled = [...modal.querySelectorAll<HTMLInputElement>('input[data-model]:checked')].map(
       (input) => input.dataset.model!,
     );
     try {
@@ -919,27 +966,20 @@ async function renderUserModels(): Promise<HTMLElement> {
         method: 'PUT',
         body: JSON.stringify({ enabled }),
       });
-      navigate(userModelsRoute(username));
+      status.textContent = 'Saved.';
+      await openUserModelsModal(wrap, username);
     } catch (error) {
       status.textContent = errorText(error);
     }
-  });
-
-  return wrap;
+  };
 }
 
-async function renderProviders(): Promise<HTMLElement> {
+async function renderProviderKeySection(): Promise<HTMLElement> {
   const keys = await apiFetch<ProviderKeyStatus[]>('/providers');
   const wrap = el(`
-    <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>Provider keys</h1>
-          <p class="muted">Stored keys win over environment variables. Leave blank and save to clear.</p>
-        </div>
-      </header>
+    <section class="provider-keys">
       <div class="grid-2" id="cards"></div>
-    </div>
+    </section>
   `);
   const cards = wrap.querySelector('#cards')!;
   for (const row of keys) {
@@ -968,6 +1008,17 @@ async function renderProviders(): Promise<HTMLElement> {
   return wrap;
 }
 
+async function renderProvidersPage(me: UserRecord): Promise<HTMLElement> {
+  const page = el('<div class="page"></div>');
+  if (me.admin) {
+    page.append(await renderProviderKeySection());
+  }
+  const catalogSection = el('<section class="provider-keys"><h2>Model catalog</h2></section>');
+  catalogSection.append(await buildModelsCatalogPanel(me.admin));
+  page.append(catalogSection);
+  return page;
+}
+
 function userRow(user: UserRecord): HTMLElement {
   return el(`
     <tr>
@@ -983,17 +1034,15 @@ function userRow(user: UserRecord): HTMLElement {
   `);
 }
 
-async function renderUsers(): Promise<HTMLElement> {
+async function renderUsers(openModelsFor?: string): Promise<HTMLElement> {
   const users = await apiFetch<UserRecord[]>('/users');
   const wrap = el(`
     <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>Users</h1>
-          <p class="muted">${num(users.length)} accounts.</p>
-        </div>
-      </header>
       <div class="panel">
+        <div class="panel-head">
+          <span></span>
+          <button type="button" id="add-user">Add user</button>
+        </div>
         <table>
           <thead>
             <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Key</th><th>Models</th><th></th></tr>
@@ -1003,17 +1052,42 @@ async function renderUsers(): Promise<HTMLElement> {
         <p class="muted small">Click a key prefix to reveal the full gateway key (stored when the key was created or rotated).</p>
         <div class="secret" id="created-key" hidden></div>
       </div>
-      <div class="panel">
-        <h2>Create user</h2>
-        <div class="form-grid">
-          <div><label>Username</label><input id="new-username" /></div>
-          <div><label>Password</label><input id="new-password" type="password" /></div>
-          <div><label>Email</label><input id="new-email" /></div>
-          <div><label>First name</label><input id="new-first" /></div>
-          <div><label>Last name</label><input id="new-last" /></div>
+      <div class="modal" id="create-user-modal" hidden>
+        <div class="modal-backdrop" data-modal-close tabindex="-1"></div>
+        <div class="modal-dialog panel" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+          <div class="panel-head">
+            <h2 id="create-user-title">Create user</h2>
+            <button type="button" class="secondary small" data-modal-close>Cancel</button>
+          </div>
+          <div class="form-grid">
+            <div><label>Username</label><input id="new-username" autocomplete="off" /></div>
+            <div><label>Password</label><input id="new-password" type="password" autocomplete="new-password" /></div>
+            <div><label>Email</label><input id="new-email" type="email" autocomplete="off" /></div>
+            <div><label>First name</label><input id="new-first" autocomplete="off" /></div>
+            <div><label>Last name</label><input id="new-last" autocomplete="off" /></div>
+          </div>
+          <label class="check"><input id="new-admin" type="checkbox" /> Admin</label>
+          <div class="modal-actions">
+            <button type="button" class="secondary" data-modal-close>Cancel</button>
+            <button type="button" id="create-user">Create</button>
+          </div>
         </div>
-        <label class="check"><input id="new-admin" type="checkbox" /> Admin</label>
-        <button id="create-user">Create</button>
+      </div>
+      <div class="modal" id="user-models-modal" hidden>
+        <div class="modal-backdrop" data-user-models-close tabindex="-1"></div>
+        <div class="modal-dialog panel modal-dialog--wide" role="dialog" aria-modal="true" aria-labelledby="user-models-title">
+          <div class="panel-head">
+            <h2 id="user-models-title">User models</h2>
+            <button type="button" class="secondary small" data-user-models-close>Close</button>
+          </div>
+          <p class="muted" id="user-models-hint">Per-user allowlist. Until you save, this user may use every model allowed on the gateway.</p>
+          <div id="user-model-panels"></div>
+          <p class="muted" id="user-model-status"></p>
+          <div class="modal-actions">
+            <button type="button" class="secondary" data-user-models-close>Cancel</button>
+            <button type="button" id="save-user-models">Save</button>
+          </div>
+        </div>
       </div>
     </div>
   `);
@@ -1052,6 +1126,45 @@ async function renderUsers(): Promise<HTMLElement> {
     secret.hidden = false;
   });
 
+  const modal = wrap.querySelector('#create-user-modal') as HTMLElement;
+  const openCreateModal = (): void => {
+    modal.hidden = false;
+    (wrap.querySelector('#new-username') as HTMLInputElement).focus();
+  };
+  const closeCreateModal = (): void => {
+    modal.hidden = true;
+  };
+
+  wrap.querySelector('#add-user')!.addEventListener('click', openCreateModal);
+  for (const node of modal.querySelectorAll('[data-modal-close]')) {
+    node.addEventListener('click', closeCreateModal);
+  }
+  modal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !modal.hidden) {
+      closeCreateModal();
+    }
+  });
+
+  const userModelsModal = wrap.querySelector('#user-models-modal') as HTMLElement;
+  const closeUserModelsModal = (): void => {
+    userModelsModal.hidden = true;
+    if (route() === '/user-models') {
+      navigate('/users');
+    }
+  };
+  for (const node of userModelsModal.querySelectorAll('[data-user-models-close]')) {
+    node.addEventListener('click', closeUserModelsModal);
+  }
+  userModelsModal.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !userModelsModal.hidden) {
+      closeUserModelsModal();
+    }
+  });
+
+  if (openModelsFor) {
+    void openUserModelsModal(wrap, openModelsFor);
+  }
+
   wrap.querySelector('#create-user')!.addEventListener('click', async () => {
     const value = (id: string): string => (wrap.querySelector(id) as HTMLInputElement).value.trim();
     const username = value('#new-username');
@@ -1068,6 +1181,7 @@ async function renderUsers(): Promise<HTMLElement> {
           admin: (wrap.querySelector('#new-admin') as HTMLInputElement).checked,
         }),
       });
+      closeCreateModal();
       secret.textContent = `${username} key: ${result.gatewayApiKey}`;
       secret.hidden = false;
       navigate('/users');
@@ -1091,9 +1205,7 @@ interface EndpointDef {
   base: 'api' | 'gateway';
   auth: EndpointAuth;
   summary: string;
-  admin?: boolean;
   body?: string;
-  stream?: boolean;
 }
 
 /** Gateway routes sit beside `/api`, not under it: same origin behind nginx, host+port in dev. */
@@ -1106,6 +1218,45 @@ function endpointUrl(route: EndpointDef): string {
 }
 const GATEWAY_KEY_STORAGE = 'pont_gateway_key';
 
+/** Signed-in users: server-stored secret beats stale localStorage (rotate, new volume). */
+async function fetchSignedInGatewayKey(): Promise<string | null> {
+  if (!token()) {
+    return null;
+  }
+  try {
+    const result = await apiFetch<{ gatewayApiKey: string }>('/me/gateway-key/reveal');
+    return result.gatewayApiKey;
+  } catch {
+    return null;
+  }
+}
+
+function persistGatewayKey(key: string): void {
+  localStorage.setItem(GATEWAY_KEY_STORAGE, key);
+}
+
+async function ensureGatewayKeyPrefilled(input: HTMLInputElement): Promise<void> {
+  const latest = await fetchSignedInGatewayKey();
+  if (latest) {
+    input.value = latest;
+    persistGatewayKey(latest);
+    return;
+  }
+  if (!input.value.trim()) {
+    input.value = localStorage.getItem(GATEWAY_KEY_STORAGE) ?? '';
+  }
+}
+
+async function resolveGatewayKeyForSend(keyInput: HTMLInputElement): Promise<string> {
+  const latest = await fetchSignedInGatewayKey();
+  if (latest) {
+    keyInput.value = latest;
+    persistGatewayKey(latest);
+    return latest;
+  }
+  return keyInput.value.trim();
+}
+
 const CHAT_BODY = `{
   "model": "opencode-<model-slug>",
   "messages": [{ "role": "user", "content": "Say hi in five words." }]
@@ -1114,92 +1265,23 @@ const RESPONSES_BODY = `{
   "model": "opencode-<model-slug>",
   "input": "Say hi in five words."
 }`;
-const MESSAGES_BODY = `{
-  "model": "opencode-<model-slug>",
-  "max_tokens": 64,
-  "messages": [{ "role": "user", "content": "Say hi in five words." }]
-}`;
-
 const ENDPOINTS: EndpointDef[] = [
   { id: 'unified-models', group: 'Gateway', method: 'GET', path: '/api/v1/models', base: 'gateway', auth: 'gateway', summary: 'All providers with a key, as Pont ids.' },
   { id: 'unified-chat', group: 'Gateway', method: 'POST', path: '/api/v1/chat/completions', base: 'gateway', auth: 'gateway', summary: 'One endpoint; model prefix picks the provider.', body: CHAT_BODY },
   { id: 'unified-responses', group: 'Gateway', method: 'POST', path: '/api/v1/responses', base: 'gateway', auth: 'gateway', summary: 'OpenAI Responses API; model prefix picks the provider.', body: RESPONSES_BODY },
-  { id: 'unified-messages', group: 'Gateway', method: 'POST', path: '/api/v1/messages', base: 'gateway', auth: 'gateway', summary: 'Anthropic messages API; model prefix picks the provider.', body: MESSAGES_BODY },
-
-  { id: 'openrouter-models', group: 'Gateway (pinned provider)', method: 'GET', path: '/openrouter/v1/models', base: 'gateway', auth: 'gateway', summary: 'List OpenRouter models as Pont ids.' },
-  { id: 'openrouter-chat', group: 'Gateway (pinned provider)', method: 'POST', path: '/openrouter/v1/chat/completions', base: 'gateway', auth: 'gateway', summary: 'OpenAI chat completions.', body: CHAT_BODY },
-  { id: 'openrouter-responses', group: 'Gateway (pinned provider)', method: 'POST', path: '/openrouter/v1/responses', base: 'gateway', auth: 'gateway', summary: 'OpenAI Responses API.', body: RESPONSES_BODY },
-  { id: 'opencode-models', group: 'Gateway (pinned provider)', method: 'GET', path: '/opencode-go/v1/models', base: 'gateway', auth: 'gateway', summary: 'List OpenCode Go models.' },
-  { id: 'opencode-chat', group: 'Gateway (pinned provider)', method: 'POST', path: '/opencode-go/v1/chat/completions', base: 'gateway', auth: 'gateway', summary: 'OpenAI chat completions (bridged to Anthropic when needed).', body: CHAT_BODY },
-  { id: 'opencode-responses', group: 'Gateway (pinned provider)', method: 'POST', path: '/opencode-go/v1/responses', base: 'gateway', auth: 'gateway', summary: 'OpenAI Responses API.', body: RESPONSES_BODY },
-  { id: 'opencode-messages', group: 'Gateway (pinned provider)', method: 'POST', path: '/opencode-go/v1/messages', base: 'gateway', auth: 'gateway', summary: 'Anthropic messages API.', body: MESSAGES_BODY },
-
-  { id: 'legacy-models', group: 'Gateway (legacy)', method: 'GET', path: '/zen/go/v1/models', base: 'gateway', auth: 'gateway', summary: 'OpenCode Go models on the old path.' },
-  { id: 'legacy-chat', group: 'Gateway (legacy)', method: 'POST', path: '/zen/go/v1/chat/completions', base: 'gateway', auth: 'gateway', summary: 'Old path kept for existing clients.', body: CHAT_BODY },
-  { id: 'legacy-responses', group: 'Gateway (legacy)', method: 'POST', path: '/zen/go/v1/responses', base: 'gateway', auth: 'gateway', summary: 'Old responses path.', body: RESPONSES_BODY },
-  { id: 'legacy-messages', group: 'Gateway (legacy)', method: 'POST', path: '/zen/go/v1/messages', base: 'gateway', auth: 'gateway', summary: 'Old Anthropic messages path.', body: MESSAGES_BODY },
 
   { id: 'health', group: 'Health', method: 'GET', path: '/health', base: 'gateway', auth: 'none', summary: 'Liveness probe.' },
-  { id: 'health-opencode', group: 'Health', method: 'GET', path: '/health/opencode', base: 'gateway', auth: 'none', summary: 'Upstream OpenCode Go reachability.' },
 
   { id: 'login', group: 'API', method: 'POST', path: '/api/login', base: 'api', auth: 'none', summary: 'Exchange username/password for a session token.', body: `{
   "username": "<username>",
   "password": "<password>"
 }` },
-  { id: 'me', group: 'API', method: 'GET', path: '/api/me', base: 'api', auth: 'token', summary: 'Current account.' },
-  { id: 'me-key', group: 'API', method: 'GET', path: '/api/me/gateway-key', base: 'api', auth: 'token', summary: 'Own gateway key prefix.' },
-  { id: 'me-key-rotate', group: 'API', method: 'POST', path: '/api/me/gateway-key/rotate', base: 'api', auth: 'token', summary: 'Rotate own gateway key; the new key is returned once.' },
-  { id: 'logs', group: 'API', method: 'GET', path: '/api/logs?limit=20&offset=0', base: 'api', auth: 'token', summary: 'Own request logs (all users for admins).' },
-  { id: 'stats', group: 'API', method: 'GET', path: '/api/stats', base: 'api', auth: 'token', summary: '24h usage breakdown.' },
-  { id: 'models-catalog', group: 'API', method: 'GET', path: '/api/models', base: 'api', auth: 'token', summary: 'Keyed providers’ models with upstream pricing and context metadata.' },
-  { id: 'vpn-status', group: 'API', method: 'GET', path: '/api/vpn/status?refresh=1', base: 'api', auth: 'token', summary: 'VPN tunnel state and egress public IP.' },
-  { id: 'events', group: 'API', method: 'GET', path: '/api/events', base: 'api', auth: 'token', summary: 'Server-sent events live log stream (3s sample).', stream: true },
-
-  { id: 'users', group: 'Admin', method: 'GET', path: '/api/users', base: 'api', auth: 'token', admin: true, summary: 'List accounts.' },
-  { id: 'user-create', group: 'Admin', method: 'POST', path: '/api/users', base: 'api', auth: 'token', admin: true, summary: 'Create an account; returns its gateway key.', body: `{
-  "username": "new-user",
-  "password": "changeme123",
-  "email": "",
-  "firstName": "",
-  "lastName": "",
-  "enabled": true,
-  "admin": false
-}` },
-  { id: 'user-update', group: 'Admin', method: 'PUT', path: '/api/users/:username', base: 'api', auth: 'token', admin: true, summary: 'Update an account (all fields required).', body: `{
-  "email": "",
-  "firstName": "Test",
-  "lastName": "User",
-  "enabled": true,
-  "admin": false
-}` },
-  { id: 'user-delete', group: 'Admin', method: 'DELETE', path: '/api/users/:username', base: 'api', auth: 'token', admin: true, summary: 'Delete an account.' },
-  { id: 'user-key', group: 'Admin', method: 'GET', path: '/api/users/:username/gateway-key', base: 'api', auth: 'token', admin: true, summary: "Reveal a user's stored gateway key (admin)." },
-  { id: 'user-key-rotate', group: 'Admin', method: 'POST', path: '/api/users/:username/gateway-key/rotate', base: 'api', auth: 'token', admin: true, summary: "Rotate another user's gateway key." },
-  { id: 'user-models', group: 'Admin', method: 'GET', path: '/api/users/:username/models', base: 'api', auth: 'token', admin: true, summary: 'Per-user model allowlist.' },
-  { id: 'user-models-save', group: 'Admin', method: 'PUT', path: '/api/users/:username/models', base: 'api', auth: 'token', admin: true, summary: 'Save which models a user may call.', body: `{
-  "enabled": ["opencode-deepseek-4-1-free"]
-}` },
-  { id: 'providers', group: 'Admin', method: 'GET', path: '/api/providers', base: 'api', auth: 'token', admin: true, summary: 'Provider key status.' },
-  { id: 'provider-key', group: 'Admin', method: 'PUT', path: '/api/providers/:id', base: 'api', auth: 'token', admin: true, summary: 'Set or clear a provider key.', body: `{
-  "apiKey": ""
-}` },
-  { id: 'providers-catalog', group: 'Admin', method: 'GET', path: '/api/providers/catalog', base: 'api', auth: 'token', admin: true, summary: 'Provider catalog and their gateway prefixes.' },
-  { id: 'provider-models', group: 'Admin', method: 'GET', path: '/api/providers/:id/models', base: 'api', auth: 'token', admin: true, summary: 'Live model list from a provider.' },
-  { id: 'provider-test', group: 'Admin', method: 'POST', path: '/api/providers/:id/test', base: 'api', auth: 'token', admin: true, summary: 'Send a test chat through a provider.', body: `{
-  "model": "opencode-<model-slug>"
-}` },
 ];
 
-function renderEndpoints(me: UserRecord): HTMLElement {
-  const routes = ENDPOINTS.filter((endpoint) => !endpoint.admin || me.admin);
+function renderEndpoints(): HTMLElement {
+  const routes = ENDPOINTS;
   const wrap = el(`
     <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>Endpoints</h1>
-          <p class="muted">${routes.length} routes. Pick one, edit the path and body, then send a real request.</p>
-        </div>
-      </header>
       <div class="grid-2">
         <div class="panel"><h2>Routes</h2><div id="route-list"></div></div>
         <div class="panel" id="tester"></div>
@@ -1219,14 +1301,14 @@ function renderEndpoints(me: UserRecord): HTMLElement {
     section.append(
       el(`
       <table>
-        <thead><tr><th>Method</th><th>Path</th><th>Description</th></tr></thead>
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
         <tbody>
           ${items
             .map(
               (item) => `
             <tr class="endpoint-row" role="button" tabindex="0" data-id="${esc(item.id)}">
               <td><span class="badge">${esc(item.method)}</span></td>
-              <td class="mono">${esc(item.path)}</td>
+              <td class="mono">${esc(endpointUrl(item))}</td>
               <td class="muted">${esc(item.summary)}</td>
             </tr>`,
             )
@@ -1282,7 +1364,8 @@ function renderEndpoints(me: UserRecord): HTMLElement {
       </select>
       <div id="ep-gateway" hidden>
         <label for="ep-key">Gateway key</label>
-        <input id="ep-key" class="mono" placeholder="pont_..." />
+        <input id="ep-key" class="mono" placeholder="pont_sk_..." />
+        <p class="muted small">Gateway routes reject the session token. When signed in, Pont loads your current key from the server (not old browser storage).</p>
       </div>
       <label for="ep-body">Body (JSON)</label>
       <textarea id="ep-body" spellcheck="false" placeholder="${hasBody ? '' : 'No body for GET/DELETE.'}" ${hasBody ? '' : 'disabled'}></textarea>
@@ -1297,7 +1380,9 @@ function renderEndpoints(me: UserRecord): HTMLElement {
     };
     auth.addEventListener('change', syncAuth);
     syncAuth();
-    (tester.querySelector('#ep-key') as HTMLInputElement).value = localStorage.getItem(GATEWAY_KEY_STORAGE) ?? '';
+    const keyInput = tester.querySelector('#ep-key') as HTMLInputElement;
+    keyInput.value = localStorage.getItem(GATEWAY_KEY_STORAGE) ?? '';
+    void ensureGatewayKeyPrefilled(keyInput);
     if (hasBody) {
       (tester.querySelector('#ep-body') as HTMLTextAreaElement).value = selected.body ?? '';
     }
@@ -1316,11 +1401,14 @@ function renderEndpoints(me: UserRecord): HTMLElement {
       headers.Authorization = `Bearer ${token()}`;
     }
     if (auth === 'gateway') {
-      const key = (tester.querySelector('#ep-key') as HTMLInputElement).value.trim();
-      localStorage.setItem(GATEWAY_KEY_STORAGE, key);
-      if (key) {
-        headers.Authorization = `Bearer ${key}`;
+      const keyInput = tester.querySelector('#ep-key') as HTMLInputElement;
+      const key = await resolveGatewayKeyForSend(keyInput);
+      if (!key) {
+        result.innerHTML =
+          '<div class="alert">Missing gateway key. Sign in so Pont can prefill it, paste a <code>pont_sk_…</code> key, or rotate one under Users.</div>';
+        return;
       }
+      headers.Authorization = `Bearer ${key}`;
     }
     if (hasBody) {
       headers['Content-Type'] = 'application/json';
@@ -1328,51 +1416,20 @@ function renderEndpoints(me: UserRecord): HTMLElement {
 
     const started = performance.now();
     result.innerHTML = '<p class="muted">Sending…</p>';
-    // `/api/events` never ends on its own: stop listening after a few seconds and show what arrived.
-    const controller = new AbortController();
-    const streamTimer = selected.stream ? setTimeout(() => controller.abort(), 3000) : undefined;
     try {
       const response = await fetch(url, {
         method: selected.method,
         headers,
         body: hasBody ? body || undefined : undefined,
-        signal: controller.signal,
       });
-      const text = selected.stream ? await readStream(response, controller.signal) : await response.text();
+      const text = await response.text();
       const pre = document.createElement('pre');
       pre.className = 'response';
       pre.textContent = prettyJson(text) || '(empty body)';
       result.replaceChildren(responseMeta(response, performance.now() - started), pre);
     } catch (error) {
       result.innerHTML = `<div class="alert">${esc(errorText(error))}</div>`;
-    } finally {
-      if (streamTimer) {
-        clearTimeout(streamTimer);
-      }
     }
-  }
-
-  async function readStream(response: Response, signal: AbortSignal): Promise<string> {
-    if (!response.body) {
-      return '';
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let text = '';
-    try {
-      while (!signal.aborted) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        text += decoder.decode(value, { stream: true });
-      }
-    } catch {
-      // aborted on purpose once the timer fires
-    } finally {
-      await reader.cancel().catch(() => undefined);
-    }
-    return text;
   }
 
   function responseMeta(response: Response, durationMs: number): HTMLElement {
@@ -1393,7 +1450,7 @@ function renderEndpoints(me: UserRecord): HTMLElement {
     try {
       return JSON.stringify(JSON.parse(trimmed), null, 2);
     } catch {
-      return trimmed; // SSE frames and plain text stay as-is
+      return trimmed;
     }
   }
 

@@ -1,5 +1,10 @@
-import { encodePontModelIdFromUpstream, upstreamFreeTierFlag } from './pont-model-id.js';
+import { encodePontModelIdFromUpstream, parsePontModelId, upstreamFreeTierFlag } from './pont-model-id.js';
 import type { ProviderId } from '../providers/provider-definitions.js';
+
+export type CatalogPricingFields = Pick<
+  CatalogModelRow,
+  'inputToken' | 'inputCacheToken' | 'outputToken' | 'outputCacheToken'
+>;
 
 export interface CatalogModelRow {
   id: string;
@@ -16,6 +21,81 @@ export interface CatalogModelRow {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function pricingFieldsFromRecord(pricing: Record<string, unknown>): CatalogPricingFields {
+  return {
+    inputToken: pricingString(pricing, ['prompt', 'input']),
+    inputCacheToken: pricingString(pricing, [
+      'input_cache_read',
+      'cache_read',
+      'input_cache',
+      'prompt_cache',
+    ]),
+    outputToken: pricingString(pricing, ['completion', 'output']),
+    outputCacheToken: pricingString(pricing, ['output_cache_read', 'cache_write', 'output_cache']),
+  };
+}
+
+/** Match OpenCode Go slugs to OpenRouter ids by normalized model tail (dots → hyphens). */
+export function catalogPricingLookupKey(upstreamId: string): string {
+  const base = upstreamId.replace(/^~+/, '').trim();
+  const tail = base.includes('/') ? base.split('/').pop()! : base;
+  return tail.replace(/\./g, '-').toLowerCase();
+}
+
+export function pricingLookupFromModelsJson(bodyText: string): Map<string, CatalogPricingFields> {
+  const lookup = new Map<string, CatalogPricingFields>();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText) as unknown;
+  } catch {
+    return lookup;
+  }
+  if (!isRecord(parsed) || !Array.isArray(parsed.data)) {
+    return lookup;
+  }
+  for (const entry of parsed.data) {
+    if (!isRecord(entry) || typeof entry.id !== 'string') {
+      continue;
+    }
+    const pricing = isRecord(entry.pricing) ? entry.pricing : {};
+    const fields = pricingFieldsFromRecord(pricing);
+    if (!fields.inputToken && !fields.outputToken) {
+      continue;
+    }
+    lookup.set(catalogPricingLookupKey(entry.id), fields);
+  }
+  return lookup;
+}
+
+export function mergeMissingCatalogPricing(row: CatalogModelRow, lookup: Map<string, CatalogPricingFields>): void {
+  if (row.providerId !== 'opencode-go') {
+    return;
+  }
+  if (row.inputToken || row.outputToken) {
+    return;
+  }
+  const parsed = parsePontModelId(row.id);
+  if (!parsed) {
+    return;
+  }
+  const source = lookup.get(catalogPricingLookupKey(parsed.upstreamSlug));
+  if (!source) {
+    return;
+  }
+  if (!row.inputToken && source.inputToken) {
+    row.inputToken = source.inputToken;
+  }
+  if (!row.inputCacheToken && source.inputCacheToken) {
+    row.inputCacheToken = source.inputCacheToken;
+  }
+  if (!row.outputToken && source.outputToken) {
+    row.outputToken = source.outputToken;
+  }
+  if (!row.outputCacheToken && source.outputCacheToken) {
+    row.outputCacheToken = source.outputCacheToken;
+  }
 }
 
 function pricingString(pricing: Record<string, unknown>, keys: string[]): string | null {
@@ -178,6 +258,7 @@ export function catalogRowsFromModelsJson(
     const free = freeTier || pricingLooksFree(pricing);
     const displayName =
       typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : upstreamId;
+    const priceFields = pricingFieldsFromRecord(pricing);
     rows.push({
       id: pontId,
       providerId,
@@ -185,15 +266,7 @@ export function catalogRowsFromModelsJson(
       model: displayName,
       contextLength: contextLengthFrom(entry),
       free,
-      inputToken: pricingString(pricing, ['prompt', 'input']),
-      inputCacheToken: pricingString(pricing, [
-        'input_cache_read',
-        'cache_read',
-        'input_cache',
-        'prompt_cache',
-      ]),
-      outputToken: pricingString(pricing, ['completion', 'output']),
-      outputCacheToken: pricingString(pricing, ['output_cache_read', 'cache_write', 'output_cache']),
+      ...priceFields,
     });
   }
   return rows;

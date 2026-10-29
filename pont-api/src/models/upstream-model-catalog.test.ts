@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { catalogRowsFromModelsJson } from './upstream-model-catalog.js';
+import {
+  catalogPricingLookupKey,
+  catalogRowsFromModelsJson,
+  mergeMissingCatalogPricing,
+  pricingLookupFromModelsJson,
+} from './upstream-model-catalog.js';
 
 const FREE_SLUGS = new Set<string>();
 
@@ -44,6 +49,35 @@ describe('catalogRowsFromModelsJson', () => {
     });
     const rows = catalogRowsFromModelsJson(body, 'opencode-go', FREE_SLUGS);
     expect(rows.map((row) => row.owner)).toEqual(['anthropic', 'openai', 'deepseek']);
+  });
+
+  it('normalizes pricing lookup keys across dot and hyphen tails', () => {
+    expect(catalogPricingLookupKey('anthropic/claude-haiku-5.5')).toBe('claude-haiku-5-5');
+    expect(catalogPricingLookupKey('claude-haiku-5-5')).toBe('claude-haiku-5-5');
+  });
+
+  it('fills OpenCode Go pricing from OpenRouter lookup by model tail', () => {
+    const openRouterBody = JSON.stringify({
+      data: [
+        {
+          id: 'anthropic/claude-haiku-5.5',
+          pricing: { prompt: '0.0000001', completion: '0.0000005', input_cache_read: '0.00000001' },
+        },
+      ],
+    });
+    const lookup = pricingLookupFromModelsJson(openRouterBody);
+    const [row] = catalogRowsFromModelsJson(
+      JSON.stringify({ data: [{ id: 'claude-haiku-5-5', owned_by: 'opencode' }] }),
+      'opencode-go',
+      FREE_SLUGS,
+    );
+    expect(row?.inputToken).toBeNull();
+    mergeMissingCatalogPricing(row!, lookup);
+    expect(row).toMatchObject({
+      inputToken: '0.0000001',
+      inputCacheToken: '0.00000001',
+      outputToken: '0.0000005',
+    });
   });
 
   it('marks free-tier Pont ids and zero pricing', () => {

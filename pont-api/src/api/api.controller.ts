@@ -90,6 +90,12 @@ export class ApiController {
     return { prefix: user.gatewayApiKeyPrefix || 'pont_…' };
   }
 
+  @Get('me/gateway-key/reveal')
+  revealOwnGatewayKey(@Req() req: Request): { gatewayApiKey: string } {
+    const { username } = this.auth.assertUser(req.headers.authorization);
+    return { gatewayApiKey: this.users.getGatewayKey(username) };
+  }
+
   @Post('me/gateway-key/rotate')
   async rotateOwnKey(@Req() req: Request): Promise<{ gatewayApiKey: string; prefix: string }> {
     const { username } = this.auth.assertUser(req.headers.authorization);
@@ -209,11 +215,8 @@ export class ApiController {
 
   @Get('models')
   async listModelsCatalog(@Req() req: Request): Promise<{ models: CatalogModelRow[] }> {
-    const { username } = this.auth.assertUser(req.headers.authorization);
-    const catalog = await this.modelsCatalog.listCatalog();
-    return {
-      models: catalog.filter((row) => this.eligibleModels.isEnabledForUser(username, row.id)),
-    };
+    this.auth.assertUser(req.headers.authorization);
+    return { models: await this.modelsCatalog.listCatalog() };
   }
 
   private async buildPontModelCatalog(): Promise<Array<{ id: string; providerId: ProviderId }>> {
