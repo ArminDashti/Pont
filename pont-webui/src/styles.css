@@ -44,6 +44,15 @@
     --scrollbar-thumb: #14141424;
     --scrollbar-thumb-hover: #14141433;
   }
+
+  select {
+    color-scheme: light;
+  }
+
+  select option {
+    background-color: var(--bg-input);
+    color: var(--fg);
+  }
 }
 
 * {
@@ -591,6 +600,15 @@ textarea {
   font-size: 0.88rem;
 }
 
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: var(--bg-elevated);
+  color: var(--fg);
+}
+
 textarea {
   min-height: 140px;
   resize: vertical;
@@ -707,6 +725,39 @@ button.small {
 .provider-keys h2 {
   margin: 0;
   font-size: 1.05rem;
+}
+
+.provider-key-row.filters-row {
+  align-items: flex-end;
+  margin-bottom: 0;
+}
+
+.provider-key-row .provider-key-field {
+  flex: 0 1 auto;
+  width: min(100%, 22rem);
+  max-width: 22rem;
+}
+
+.provider-key-row .provider-key-field input {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.provider-key-row .provider-key-field input:read-only {
+  cursor: text;
+  color: var(--text-dim);
+}
+
+.provider-key-row #provider-key-save {
+  flex-shrink: 0;
+}
+
+.provider-key-status {
+  margin-top: 0.65rem;
+}
+
+.provider-key-status .badge {
+  margin-right: 0.35rem;
 }
 
 .modal {

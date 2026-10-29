@@ -239,6 +239,7 @@ async function render(): Promise<void> {
   const links: Array<[string, string]> = [
     ['/', 'Overview'],
     ['/providers', 'Providers'],
+    ['/playground', 'Playground'],
     ['/logs', 'Logs'],
     ['/endpoints', 'Endpoints'],
     ...(me.admin ? ([['/users', 'Users']] as Array<[string, string]>) : []),
@@ -278,6 +279,8 @@ async function render(): Promise<void> {
       main.append(renderEndpoints());
     } else if (target === '/providers') {
       main.append(await renderProvidersPage(me));
+    } else if (target === '/playground') {
+      main.append(await renderPlayground(me));
     } else if (me.admin && (target === '/users' || target === '/user-models')) {
       const modelsUsername =
         target === '/user-models' ? queryParam('username')?.trim() || undefined : undefined;
@@ -512,13 +515,22 @@ interface CatalogModelRow {
   outputCacheToken: string | null;
 }
 
-const PROVIDER_LABELS: Record<string, string> = {
-  'opencode-go': 'OpenCode Go',
-  openrouter: 'OpenRouter',
-};
+const PONT_PROVIDER_OPTIONS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'openrouter', label: 'OpenRouter' },
+  { id: 'opencode-go', label: 'OpenCode Go' },
+  { id: 'opencode-zen', label: 'OpenCode Zen' },
+  { id: 'openai-compatible', label: 'OpenAI-Compatible' },
+];
 
 function providerLabel(id: string): string {
-  return PROVIDER_LABELS[id] ?? id;
+  return PONT_PROVIDER_OPTIONS.find((row) => row.id === id)?.label ?? id;
+}
+
+function providerSelectOptions(selectedId: string): string {
+  return PONT_PROVIDER_OPTIONS.map((row) => {
+    const selected = selectedId === row.id;
+    return `<option value="${esc(row.id)}"${selected ? ' selected' : ''}>${esc(row.label)}</option>`;
+  }).join('');
 }
 
 function trimDecimalZeros(value: string): string {
@@ -717,32 +729,25 @@ function filterCatalogRows(
 
 async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   const rawProvider = queryParam('provider');
-  const showAllProviders = rawProvider === 'all';
-  const providerFilter = showAllProviders ? '' : (rawProvider ?? DEFAULT_MODELS_PROVIDER);
+  const providerFilter =
+    rawProvider && PONT_PROVIDER_OPTIONS.some((row) => row.id === rawProvider)
+      ? rawProvider
+      : DEFAULT_MODELS_PROVIDER;
   const freeFilter = queryParam('free') ?? '';
   const qFilter = queryParam('q') ?? '';
   const sortKey = catalogSortKey(queryParam('sort'));
   const sortDir = queryParam('dir') === 'desc' ? 'desc' : 'asc';
   const { models } = await apiFetch<{ models: CatalogModelRow[] }>('/models');
-  const hasOpenCodeGo = models.some((row) => row.providerId === DEFAULT_MODELS_PROVIDER);
-  const defaultToAll = rawProvider === undefined && !hasOpenCodeGo;
-  const effectiveShowAll = showAllProviders || defaultToAll;
-  const effectiveProviderFilter = effectiveShowAll ? '' : providerFilter;
   const filtered = sortCatalogRows(
     filterCatalogRows(models, {
-      provider: effectiveProviderFilter || undefined,
+      provider: providerFilter,
       free: freeFilter || undefined,
       q: qFilter || undefined,
     }),
     sortKey,
     sortDir,
   );
-  const providers = [...new Set(models.map((row) => row.providerId))];
-  if (!providers.includes(DEFAULT_MODELS_PROVIDER)) {
-    providers.push(DEFAULT_MODELS_PROVIDER);
-  }
-  providers.sort();
-  const providerSelectValue = effectiveShowAll ? 'all' : providerFilter;
+  const providerSelectValue = providerFilter;
   const colCount = 9;
 
   const sortMark = (key: CatalogSortKey): string => {
@@ -772,13 +777,7 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
           <label>
             Provider
             <select id="models-provider">
-              <option value="all"${providerSelectValue === 'all' ? ' selected' : ''}>All providers</option>
-              ${providers
-                .map((id) => {
-                  const selected = providerSelectValue === id;
-                  return `<option value="${esc(id)}"${selected ? ' selected' : ''}>${esc(providerLabel(id))}</option>`;
-                })
-                .join('')}
+              ${providerSelectOptions(providerSelectValue)}
             </select>
           </label>
           <label>
@@ -823,10 +822,10 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
       msg = isAdmin
         ? 'No models loaded. Add a provider API key above, or check upstream connectivity.'
         : 'No models available for your account. Ask an administrator to configure provider keys.';
-    } else if (!effectiveShowAll && providerFilter === DEFAULT_MODELS_PROVIDER && !hasOpenCodeGo) {
+    } else {
       msg = isAdmin
-        ? 'No OpenCode Go models in catalog. Add an OpenCode Go API key above, or set Provider to All providers.'
-        : 'No OpenCode Go models in your catalog. Try Provider → All providers, or ask an administrator to add a key.';
+        ? `No ${providerLabel(providerFilter)} models in catalog. Add an API key for this provider above.`
+        : `No ${providerLabel(providerFilter)} models in your catalog. Ask an administrator to add a provider key.`;
     }
     tbody.append(el(`<tr><td colspan="${colCount}" class="muted">${msg}</td></tr>`));
   } else {
@@ -859,8 +858,7 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   }
 
   const applyFilters = (): void => {
-    const providerRaw = (wrap.querySelector('#models-provider') as HTMLSelectElement).value;
-    const provider = providerRaw === 'all' ? 'all' : providerRaw;
+    const provider = (wrap.querySelector('#models-provider') as HTMLSelectElement).value;
     const free = (wrap.querySelector('#models-free') as HTMLSelectElement).value;
     const q = (wrap.querySelector('#models-q') as HTMLInputElement).value.trim();
     navigate(
@@ -976,35 +974,95 @@ async function openUserModelsModal(wrap: HTMLElement, username: string): Promise
 
 async function renderProviderKeySection(): Promise<HTMLElement> {
   const keys = await apiFetch<ProviderKeyStatus[]>('/providers');
+  const byId = new Map(keys.map((row) => [row.id, row]));
+  const initialId =
+    PONT_PROVIDER_OPTIONS.find((row) => byId.has(row.id))?.id ?? PONT_PROVIDER_OPTIONS[0].id;
   const wrap = el(`
     <section class="provider-keys">
-      <div class="grid-2" id="cards"></div>
+      <div class="panel">
+        <div class="provider-key-row filters-row">
+          <label>
+            Provider
+            <select id="provider-key-select">
+              ${providerSelectOptions(initialId)}
+            </select>
+          </label>
+          <label class="provider-key-field">
+            API key
+            <input id="provider-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key (empty clears)" />
+          </label>
+          <button type="button" id="provider-key-save" class="small">Save</button>
+        </div>
+        <p class="provider-key-status mono muted" id="provider-key-status"></p>
+      </div>
     </section>
   `);
-  const cards = wrap.querySelector('#cards')!;
-  for (const row of keys) {
-    const card = el(`
-      <div class="panel">
-        <div class="panel-head">
-          <h2>${esc(row.id)}</h2>
-          <span class="badge ${row.source === 'none' ? 'bad' : 'good'}">${esc(row.source)}</span>
-        </div>
-        <p class="mono muted">${esc(row.maskedKey ?? 'no key')}</p>
-        <label>API key</label>
-        <input data-input="${esc(row.id)}" type="password" placeholder="Paste key (empty clears)" />
-        <button data-save="${esc(row.id)}">Save</button>
-      </div>
-    `);
-    card.querySelector('[data-save]')!.addEventListener('click', async () => {
-      const input = card.querySelector('input') as HTMLInputElement;
-      await apiFetch(`/providers/${encodeURIComponent(row.id)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ apiKey: input.value }),
-      });
-      navigate('/providers');
-    });
-    cards.append(card);
+  const select = wrap.querySelector('#provider-key-select') as HTMLSelectElement;
+  const input = wrap.querySelector('#provider-key-input') as HTMLInputElement;
+  const statusEl = wrap.querySelector('#provider-key-status')!;
+  let storedMask: string | undefined;
+  let keyEditing = false;
+
+  function statusFor(id: string): ProviderKeyStatus {
+    return byId.get(id) ?? { id, source: 'none', maskedKey: undefined };
   }
+
+  function showStoredKey(mask: string | undefined): void {
+    storedMask = mask;
+    keyEditing = false;
+    if (mask) {
+      input.type = 'text';
+      input.readOnly = true;
+      input.value = mask;
+      input.placeholder = '';
+    } else {
+      input.type = 'password';
+      input.readOnly = false;
+      input.value = '';
+      input.placeholder = 'Paste key (empty clears)';
+    }
+  }
+
+  function syncStatus(providerId: string): void {
+    const row = statusFor(providerId);
+    const badgeClass = row.source === 'none' ? 'bad' : 'good';
+    const hint =
+      row.source === 'none' ? 'No API key · not set' : 'Click the field to replace the stored key';
+    statusEl.innerHTML = `<span class="badge ${badgeClass}">${esc(row.source)}</span> ${esc(hint)}`;
+    showStoredKey(row.maskedKey);
+  }
+
+  input.addEventListener('focus', () => {
+    if (!input.readOnly || !storedMask) {
+      return;
+    }
+    keyEditing = true;
+    input.readOnly = false;
+    input.type = 'password';
+    input.value = '';
+    input.placeholder = 'Paste new key (Save with empty clears)';
+  });
+
+  input.addEventListener('blur', () => {
+    if (keyEditing && !input.value.trim() && storedMask) {
+      showStoredKey(storedMask);
+    }
+  });
+
+  syncStatus(select.value);
+  select.addEventListener('change', () => syncStatus(select.value));
+
+  wrap.querySelector('#provider-key-save')!.addEventListener('click', async () => {
+    const providerId = select.value;
+    if (!keyEditing && storedMask) {
+      return;
+    }
+    await apiFetch(`/providers/${encodeURIComponent(providerId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ apiKey: input.value }),
+    });
+    navigate('/providers');
+  });
   return wrap;
 }
 
@@ -1255,6 +1313,268 @@ async function resolveGatewayKeyForSend(keyInput: HTMLInputElement): Promise<str
     return latest;
   }
   return keyInput.value.trim();
+}
+
+interface ProviderTestResult {
+  providerId: string;
+  endpointId: string;
+  model?: string;
+  ok: boolean;
+  status: number;
+  latencyMs: number;
+  sample: string;
+}
+
+const DEFAULT_PLAYGROUND_PROMPT = 'Reply with OK.';
+
+function playgroundResultBlock(
+  ok: boolean,
+  status: number,
+  latencyMs: number,
+  sample: string,
+  extra?: string,
+): HTMLElement {
+  const wrap = el('<div></div>');
+  wrap.append(
+    el(`
+      <div class="response-meta">
+        <span class="badge ${ok ? 'good' : 'bad'}">${status}</span>
+        <span class="muted">${Math.round(latencyMs)} ms</span>
+        ${extra ? `<span class="muted">${esc(extra)}</span>` : ''}
+      </div>
+    `),
+  );
+  const pre = document.createElement('pre');
+  pre.className = 'response';
+  pre.textContent = sample;
+  wrap.append(pre);
+  return wrap;
+}
+
+async function renderPlayground(me: UserRecord): Promise<HTMLElement> {
+  const { models } = await apiFetch<{ models: CatalogModelRow[] }>('/models');
+  const providers = [...new Set(models.map((row) => row.providerId))].sort();
+  const wrap = el(`
+    <div class="page">
+      <header class="page-head">
+        <div>
+          <h1>Playground</h1>
+          <p class="muted">Send a short prompt through the gateway or, as admin, test a provider upstream.</p>
+        </div>
+      </header>
+      <div class="grid-2">
+        <div class="panel" id="pg-controls"></div>
+        <div class="panel" id="pg-result">
+          <h2>Result</h2>
+          <p class="muted" id="pg-placeholder">Run a test to see the response here.</p>
+        </div>
+      </div>
+    </div>
+  `);
+
+  const controls = wrap.querySelector('#pg-controls')!;
+  const result = wrap.querySelector('#pg-result')!;
+  const placeholder = wrap.querySelector('#pg-placeholder') as HTMLElement;
+
+  controls.append(
+    el(`
+      <div class="playground-form">
+      <h2>Request</h2>
+      <label for="pg-mode">Mode</label>
+      <select id="pg-mode">
+        <option value="gateway">Gateway (unified /api/v1)</option>
+        ${me.admin ? '<option value="upstream">Provider upstream (direct)</option>' : ''}
+      </select>
+      <label for="pg-provider">Provider</label>
+      <select id="pg-provider">
+        <option value="">All providers</option>
+        ${providers
+          .map((id) => `<option value="${esc(id)}">${esc(providerLabel(id))}</option>`)
+          .join('')}
+      </select>
+      <label for="pg-model">Model</label>
+      <select id="pg-model"></select>
+      <label for="pg-prompt">Prompt</label>
+      <textarea id="pg-prompt" spellcheck="false" rows="4">${esc(DEFAULT_PLAYGROUND_PROMPT)}</textarea>
+      <button type="button" id="pg-run">Run test</button>
+      </div>
+    `),
+  );
+
+  const modeSelect = controls.querySelector('#pg-mode') as HTMLSelectElement;
+  const providerSelect = controls.querySelector('#pg-provider') as HTMLSelectElement;
+  const modelSelect = controls.querySelector('#pg-model') as HTMLSelectElement;
+  const promptInput = controls.querySelector('#pg-prompt') as HTMLTextAreaElement;
+  const runBtn = controls.querySelector('#pg-run') as HTMLButtonElement;
+
+  let upstreamModelsByProvider = new Map<string, string[]>();
+
+  function catalogModelsForProvider(providerId: string): CatalogModelRow[] {
+    if (!providerId) {
+      return models;
+    }
+    return models.filter((row) => row.providerId === providerId);
+  }
+
+  function fillModelSelect(providerId: string, upstreamIds?: string[]): void {
+    modelSelect.innerHTML = '';
+    const list =
+      modeSelect.value === 'upstream' && upstreamIds
+        ? upstreamIds.map((id) => ({ id, label: id }))
+        : catalogModelsForProvider(providerId).map((row) => ({
+            id: row.id,
+            label: `${catalogModelSlug(row)} (${row.id})`,
+          }));
+    if (list.length === 0) {
+      modelSelect.append(el('<option value="">No models</option>'));
+      return;
+    }
+    for (const item of list) {
+      modelSelect.append(el(`<option value="${esc(item.id)}">${esc(item.label)}</option>`));
+    }
+  }
+
+  async function syncUpstreamModels(): Promise<void> {
+    const providerId = providerSelect.value;
+    if (!providerId) {
+      fillModelSelect('');
+      return;
+    }
+    if (!upstreamModelsByProvider.has(providerId)) {
+      const { models: ids } = await apiFetch<{ models: string[] }>(
+        `/providers/${encodeURIComponent(providerId)}/models`,
+      );
+      upstreamModelsByProvider.set(providerId, ids);
+    }
+    fillModelSelect(providerId, upstreamModelsByProvider.get(providerId));
+  }
+
+  function syncModeUi(): void {
+    const upstream = modeSelect.value === 'upstream';
+    if (upstream) {
+      if (!providerSelect.value && providers[0]) {
+        providerSelect.value = providers[0];
+      }
+      providerSelect.querySelector('option[value=""]')?.remove();
+      void syncUpstreamModels();
+    } else {
+      if (!providerSelect.querySelector('option[value=""]')) {
+        providerSelect.prepend(el('<option value="">All providers</option>'));
+      }
+      fillModelSelect(providerSelect.value);
+    }
+  }
+
+  modeSelect.addEventListener('change', () => {
+    upstreamModelsByProvider = new Map();
+    syncModeUi();
+  });
+  providerSelect.addEventListener('change', () => {
+    if (modeSelect.value === 'upstream') {
+      void syncUpstreamModels();
+    } else {
+      fillModelSelect(providerSelect.value);
+    }
+  });
+
+  fillModelSelect('');
+
+  runBtn.addEventListener('click', () => void runTest());
+
+  async function runTest(): Promise<void> {
+    const prompt = promptInput.value.trim();
+    const model = modelSelect.value.trim();
+    if (!model) {
+      placeholder.hidden = true;
+      result.querySelectorAll('.response-meta, pre.response, .alert').forEach((node) => node.remove());
+      result.append(el('<div class="alert">Pick a model first.</div>'));
+      return;
+    }
+    if (!prompt) {
+      placeholder.hidden = true;
+      result.querySelectorAll('.response-meta, pre.response, .alert').forEach((node) => node.remove());
+      result.append(el('<div class="alert">Prompt cannot be empty.</div>'));
+      return;
+    }
+
+    runBtn.disabled = true;
+    placeholder.hidden = true;
+    result.querySelectorAll('.response-meta, pre.response, .alert').forEach((node) => node.remove());
+    result.append(el('<p class="muted" id="pg-loading">Sending…</p>'));
+
+    const started = performance.now();
+    try {
+      if (modeSelect.value === 'upstream') {
+        const providerId = providerSelect.value;
+        if (!providerId) {
+          throw new Error('Select a provider for upstream tests.');
+        }
+        const test = await apiFetch<ProviderTestResult>(`/providers/${encodeURIComponent(providerId)}/test`, {
+          method: 'POST',
+          body: JSON.stringify({ model }),
+        });
+        result.querySelector('#pg-loading')?.remove();
+        result.append(
+          playgroundResultBlock(
+            test.ok,
+            test.status,
+            test.latencyMs,
+            test.sample,
+            `${test.providerId} · ${test.endpointId}${test.model ? ` · ${test.model}` : ''}`,
+          ),
+        );
+      } else {
+        const keyInput = document.createElement('input');
+        keyInput.value = localStorage.getItem(GATEWAY_KEY_STORAGE) ?? '';
+        await ensureGatewayKeyPrefilled(keyInput);
+        const key = await resolveGatewayKeyForSend(keyInput);
+        if (!key) {
+          throw new Error('Missing gateway key. Sign in or rotate a key under Users.');
+        }
+        const response = await fetch(`${GATEWAY_BASE}/api/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 256,
+          }),
+        });
+        const text = await response.text();
+        const latencyMs = performance.now() - started;
+        let sample = text.trim();
+        try {
+          const parsed = JSON.parse(text) as {
+            choices?: { message?: { content?: string } }[];
+            error?: { message?: string };
+          };
+          if (parsed.error?.message) {
+            sample = parsed.error.message;
+          } else if (parsed.choices?.[0]?.message?.content) {
+            sample = parsed.choices[0].message!.content!;
+          } else {
+            sample = JSON.stringify(parsed, null, 2);
+          }
+        } catch {
+          /* keep raw text */
+        }
+        result.querySelector('#pg-loading')?.remove();
+        result.append(
+          playgroundResultBlock(response.ok, response.status, latencyMs, sample, 'Gateway · chat/completions'),
+        );
+      }
+    } catch (error) {
+      result.querySelector('#pg-loading')?.remove();
+      result.append(el(`<div class="alert">${esc(errorText(error))}</div>`));
+    } finally {
+      runBtn.disabled = false;
+    }
+  }
+
+  return wrap;
 }
 
 const CHAT_BODY = `{

@@ -13,8 +13,13 @@ export interface ProviderKeyStatus {
   maskedKey: string | undefined;
 }
 
+const MASK_MIDDLE_LEN = 31;
+
 export function maskSecret(secret: string): string {
-  return secret.length <= 8 ? '********' : `${secret.slice(0, 4)}********${secret.slice(-4)}`;
+  if (secret.length <= 8) {
+    return '********';
+  }
+  return `${secret.slice(0, 4)}${'*'.repeat(MASK_MIDDLE_LEN)}${secret.slice(-4)}`;
 }
 
 function storageKey(providerId: string): string {
