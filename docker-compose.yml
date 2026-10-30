@@ -1,7 +1,8 @@
 name: pont
 
 services:
-  pont-api:
+  api:
+    container_name: api
     build:
       context: .
       dockerfile: pont-api/Dockerfile
@@ -25,7 +26,8 @@ services:
       retries: 6
     restart: unless-stopped
 
-  pont-webui:
+  webui:
+    container_name: webui
     build:
       context: .
       dockerfile: pont-webui/Dockerfile
@@ -33,7 +35,7 @@ services:
     ports:
       - "9881:80"
     depends_on:
-      pont-api:
+      api:
         condition: service_healthy
     restart: unless-stopped
 

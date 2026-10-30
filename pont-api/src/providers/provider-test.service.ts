@@ -4,7 +4,7 @@ import { performance } from 'node:perf_hooks';
 import { getOpenCodeGoApiStyle } from '@pont/opencode-go';
 
 import { type PontConfig, pontConfigKey } from '../config/pont.config.js';
-import { encodePontModelIdFromUpstream } from '../models/pont-model-id.js';
+import { encodePontModelIdFromUpstream, resolveUpstreamModelId } from '../models/pont-model-id.js';
 import { isAnthropicModel } from '../opencode-go/anthropic-bridge/openai-to-anthropic.js';
 import { openCodeGoUpstreamUrlForEndpoint } from '../opencode-go/upstream-url.js';
 import { SESSION_HEADER, resolveSessionId } from '../opencode-go/session.util.js';
@@ -72,8 +72,9 @@ export class ProviderTestService {
   /** Sends one simple message through the provider's chat endpoint (Messages for Anthropic and Claude on OpenCode). */
   async testChat(providerId: string, model?: string): Promise<ProviderTestResult> {
     const provider = this.registry.get(providerId);
-    const resolvedModel = model?.trim() || (await this.firstModel(provider, this.requireKey(provider)));
-    return this.testEndpoint(providerId, chatEndpointId(provider, resolvedModel), resolvedModel);
+    const rawModel = model?.trim() || (await this.firstModel(provider, this.requireKey(provider)));
+    const upstreamModel = resolveUpstreamModelId(rawModel);
+    return this.testEndpoint(providerId, chatEndpointId(provider, upstreamModel), rawModel);
   }
 
   /** Calls one catalog endpoint with a minimal request and reports the outcome. */
@@ -87,9 +88,10 @@ export class ProviderTestService {
       return toResult(provider, endpoint.id, reply, undefined);
     }
 
-    const resolvedModel = model?.trim() || (await this.firstModel(provider, key));
-    const reply = await this.send(provider, endpoint, key, buildTestBody(endpoint.id, resolvedModel));
-    return toResult(provider, endpoint.id, reply, resolvedModel);
+    const rawModel = model?.trim() || (await this.firstModel(provider, key));
+    const upstreamModel = resolveUpstreamModelId(rawModel);
+    const reply = await this.send(provider, endpoint, key, buildTestBody(endpoint.id, upstreamModel));
+    return toResult(provider, endpoint.id, reply, rawModel);
   }
 
   private requireKey(provider: ProviderDefinition): string {

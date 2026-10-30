@@ -54,7 +54,7 @@ docker compose up -d --build
 ```
 
 - API: http://127.0.0.1:9880 (image `pont-api:local`, SQLite in volume `pont_pont-data`)
-- WebUI: http://127.0.0.1:9881 (image `pont-webui:local`, static nginx build; `/api` is proxied to `pont-api`)
+- WebUI: http://127.0.0.1:9881 (image `pont-webui:local`, static nginx build; `/api` is proxied to `api`)
 
 Pass provider keys through the environment (`OPENROUTER_API_KEY`, `OPENCODE_GO_API_KEY`) or set them in the
 WebUI → Providers page (stored in the DB volume). `docker compose down` keeps the volume; never use `-v`.

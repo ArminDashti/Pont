@@ -76,6 +76,25 @@ describe('ProviderTestService', () => {
 
     expect(result).toMatchObject({ providerId: 'opencode-go', ok: true, status: 200, sample: 'OK.' });
   });
+
+  it('accepts pont-encoded model ids for upstream chat tests', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/models')) {
+          return jsonResponse({ data: [{ id: 'openai/gpt-4o-mini' }] });
+        }
+        const sent = JSON.parse(String(init?.body)) as { model: string };
+        expect(sent.model).toBe('openai/gpt-4o-mini');
+        return jsonResponse({ choices: [{ message: { content: 'OK.' } }] });
+      }),
+    );
+    const result = await createService({ openrouter: 'or-key' }).testChat(
+      'openrouter',
+      'openrouter-openai-gpt-4o-mini',
+    );
+    expect(result).toMatchObject({ ok: true, model: 'openrouter-openai-gpt-4o-mini', sample: 'OK.' });
+  });
 });
 
 describe('extractSample', () => {
