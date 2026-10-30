@@ -37,6 +37,57 @@ function pricingFieldsFromRecord(pricing: Record<string, unknown>): CatalogPrici
   };
 }
 
+/** OpenCode Go /models uses `cost.text` with USD per 1M tokens (base tier, no context overrides). */
+function perMillionUsdToPerTokenString(price: unknown): string | null {
+  if (typeof price === 'number' && Number.isFinite(price)) {
+    return String(price / 1_000_000);
+  }
+  if (typeof price === 'string' && price.trim()) {
+    const n = Number(price.trim());
+    if (Number.isFinite(n)) {
+      return String(n / 1_000_000);
+    }
+  }
+  return null;
+}
+
+function pricingFieldsFromOpenCodeCost(item: Record<string, unknown>): CatalogPricingFields | null {
+  const cost = item.cost;
+  if (!isRecord(cost)) {
+    return null;
+  }
+  const text = cost.text;
+  if (!isRecord(text)) {
+    return null;
+  }
+  const input = isRecord(text.input) ? text.input : null;
+  const output = isRecord(text.output) ? text.output : null;
+  const inputCache = input && isRecord(input.cache) ? input.cache : null;
+  const inputToken = input ? perMillionUsdToPerTokenString(input.price) : null;
+  const outputToken = output ? perMillionUsdToPerTokenString(output.price) : null;
+  const inputCacheToken = inputCache ? perMillionUsdToPerTokenString(inputCache.read) : null;
+  const outputCacheToken = inputCache ? perMillionUsdToPerTokenString(inputCache.write) : null;
+  if (!inputToken && !outputToken && !inputCacheToken && !outputCacheToken) {
+    return null;
+  }
+  return { inputToken, inputCacheToken, outputToken, outputCacheToken };
+}
+
+function mergePricingFields(
+  openRouterStyle: CatalogPricingFields,
+  openCodeCost: CatalogPricingFields | null,
+): CatalogPricingFields {
+  if (!openCodeCost) {
+    return openRouterStyle;
+  }
+  return {
+    inputToken: openCodeCost.inputToken ?? openRouterStyle.inputToken,
+    inputCacheToken: openCodeCost.inputCacheToken ?? openRouterStyle.inputCacheToken,
+    outputToken: openCodeCost.outputToken ?? openRouterStyle.outputToken,
+    outputCacheToken: openCodeCost.outputCacheToken ?? openRouterStyle.outputCacheToken,
+  };
+}
+
 /** Match OpenCode Go slugs to OpenRouter ids by normalized model tail (dots → hyphens). */
 export function catalogPricingLookupKey(upstreamId: string): string {
   const base = upstreamId.replace(/^~+/, '').trim();
@@ -126,6 +177,13 @@ function contextLengthFrom(item: Record<string, unknown>): number | null {
   if (direct) {
     return direct;
   }
+  const limit = item.limit;
+  if (isRecord(limit)) {
+    const fromLimit = positiveInt(limit.context);
+    if (fromLimit) {
+      return fromLimit;
+    }
+  }
   const top = item.top_provider;
   if (isRecord(top)) {
     return positiveInt(top.context_length);
@@ -207,6 +265,24 @@ function creatorFromModelName(name: unknown): string | null {
   return label.replace(/\s+/g, ' ').split(' ')[0]!.toLowerCase();
 }
 
+function pricingLooksFreeFromOpenCodeCost(item: Record<string, unknown>): boolean | null {
+  const fields = pricingFieldsFromOpenCodeCost(item);
+  if (!fields) {
+    return null;
+  }
+  const values = [fields.inputToken, fields.outputToken, fields.inputCacheToken, fields.outputCacheToken];
+  for (const raw of values) {
+    if (raw === null) {
+      continue;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function pricingLooksFree(pricing: Record<string, unknown>): boolean {
   const keys = [
     'prompt',
@@ -255,10 +331,14 @@ export function catalogRowsFromModelsJson(
     const pontId = encodePontModelIdFromUpstream(providerId, upstreamId, freeSlugs);
     const { freeTier } = upstreamFreeTierFlag(providerId, upstreamId, freeSlugs);
     const pricing = isRecord(entry.pricing) ? entry.pricing : {};
-    const free = freeTier || pricingLooksFree(pricing);
+    const costFree = pricingLooksFreeFromOpenCodeCost(entry);
+    const free = freeTier || costFree === true || (costFree === null && pricingLooksFree(pricing));
     const displayName =
       typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : upstreamId;
-    const priceFields = pricingFieldsFromRecord(pricing);
+    const priceFields = mergePricingFields(
+      pricingFieldsFromRecord(pricing),
+      pricingFieldsFromOpenCodeCost(entry),
+    );
     rows.push({
       id: pontId,
       providerId,

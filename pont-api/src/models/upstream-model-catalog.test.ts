@@ -56,6 +56,31 @@ describe('catalogRowsFromModelsJson', () => {
     expect(catalogPricingLookupKey('claude-haiku-5-5')).toBe('claude-haiku-5-5');
   });
 
+  it('maps OpenCode Go cost.text USD per 1M tokens to per-token catalog fields', () => {
+    const body = JSON.stringify({
+      data: [
+        {
+          id: 'glm-5.3-flash',
+          owned_by: 'opencode',
+          limit: { context: 1000000 },
+          cost: {
+            text: {
+              input: { price: 0.15, cache: { read: 0.03 } },
+              output: { price: 0.5 },
+            },
+          },
+        },
+      ],
+    });
+    const [row] = catalogRowsFromModelsJson(body, 'opencode-go', FREE_SLUGS);
+    expect(row).toMatchObject({
+      contextLength: 1000000,
+      inputToken: '0.00000015',
+      inputCacheToken: '0.00000003',
+      outputToken: '0.0000005',
+    });
+  });
+
   it('fills OpenCode Go pricing from OpenRouter lookup by model tail', () => {
     const openRouterBody = JSON.stringify({
       data: [
