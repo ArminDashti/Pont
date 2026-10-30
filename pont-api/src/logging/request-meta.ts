@@ -74,7 +74,9 @@ export function extractUsername(body: unknown, pathSuffix: string): string | und
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export const PONT_CLIENT_APP_HEADER = 'x-yoda-client-app';
+export const PONT_CLIENT_APP_HEADER = 'client-app';
+export const LEGACY_CLIENT_APP_HEADER = 'x-yoda-client-app';
+export const PONT_END_USER_HEADER = 'username';
 
 const CLIENT_APP_ALIASES: Readonly<Record<string, string>> = {
   nanobot: 'agent',
@@ -98,7 +100,42 @@ export function normalizeClientApp(raw: string): string {
   return CLIENT_APP_ALIASES[trimmed] ?? trimmed;
 }
 
-/** Client app from `X-Yoda-Client-App` or request body metadata. */
+export function resolveClientAppHeader(
+  headers: Record<string, string | string[] | undefined>,
+): string | string[] | undefined {
+  return headers[PONT_CLIENT_APP_HEADER] ?? headers[LEGACY_CLIENT_APP_HEADER];
+}
+
+function headerString(value: string | string[] | undefined): string | undefined {
+  const raw = typeof value === 'string' ? value : Array.isArray(value) ? value[0] : undefined;
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/** Copies optional `username` header into the provider body field when not already set. */
+export function applyEndUserFromHeader(
+  body: unknown,
+  usernameHeader: string | string[] | undefined,
+  pathSuffix: string,
+): unknown {
+  const username = headerString(usernameHeader);
+  if (!username || !isRecord(body)) {
+    return body;
+  }
+  if (pathSuffix === 'messages') {
+    const meta = isRecord(body.metadata) ? body.metadata : {};
+    if (typeof meta.user_id === 'string' && meta.user_id.trim()) {
+      return body;
+    }
+    return { ...body, metadata: { ...meta, user_id: username } };
+  }
+  if (typeof body.user === 'string' && body.user.trim()) {
+    return body;
+  }
+  return { ...body, user: username };
+}
+
+/** Client app from `client-app` (legacy `x-yoda-client-app`) or request body metadata. */
 export function extractClientApp(headerValue: string | string[] | undefined, body: unknown): string {
   const fromHeader = typeof headerValue === 'string' ? headerValue : Array.isArray(headerValue) ? headerValue[0] : '';
   if (fromHeader?.trim()) {

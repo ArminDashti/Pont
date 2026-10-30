@@ -22,11 +22,13 @@ import {
 import { SESSION_HEADER, resolveSessionId } from '../opencode-go/session.util.js';
 import { extractUsage } from '../logging/usage.js';
 import {
+  applyEndUserFromHeader,
   extractClientApp,
   extractTitle,
   parseJsonBody,
   readRequestModel,
-  PONT_CLIENT_APP_HEADER,
+  PONT_END_USER_HEADER,
+  resolveClientAppHeader,
 } from '../logging/request-meta.js';
 import { type ProviderDefinition } from '../providers/provider-definitions.js';
 import { upstreamAuthHeaders } from '../providers/provider-auth.js';
@@ -187,7 +189,12 @@ export class ProviderProxyService {
 
     let body = await this.readRequestBody(req);
     let requestBody = parseJsonBody(body);
-    const clientApp = extractClientApp(req.headers[PONT_CLIENT_APP_HEADER], requestBody);
+    const bodyBeforeEndUser = requestBody;
+    requestBody = applyEndUserFromHeader(requestBody, req.headers[PONT_END_USER_HEADER], pathSuffix);
+    if (requestBody !== bodyBeforeEndUser) {
+      body = Buffer.from(JSON.stringify(requestBody));
+    }
+    const clientApp = extractClientApp(resolveClientAppHeader(req.headers), requestBody);
 
     const modelName =
       isJsonObject(requestBody) && typeof requestBody.model === 'string' ? requestBody.model : undefined;

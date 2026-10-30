@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractClientApp, extractTitle, extractUsername } from './request-meta.js';
+import { applyEndUserFromHeader, extractClientApp, extractTitle, extractUsername, resolveClientAppHeader } from './request-meta.js';
 
 describe('extractTitle', () => {
   it('uses the first user message string and collapses whitespace', () => {
@@ -47,10 +47,15 @@ describe('extractUsername', () => {
 });
 
 describe('extractClientApp', () => {
-  it('reads the client app header and normalizes aliases', () => {
+  it('reads the client-app header and normalizes aliases', () => {
     expect(extractClientApp('nanobot', undefined)).toBe('agent');
     expect(extractClientApp('OpenWebUI', undefined)).toBe('chat');
     expect(extractClientApp('nanobrowser', undefined)).toBe('extension');
+  });
+
+  it('still reads legacy x-yoda-client-app via resolveClientAppHeader', () => {
+    expect(resolveClientAppHeader({ 'x-yoda-client-app': 'nanobot' })).toBe('nanobot');
+    expect(extractClientApp(resolveClientAppHeader({ 'x-yoda-client-app': 'nanobot' }), undefined)).toBe('agent');
   });
 
   it('reads metadata.client_app from the JSON body', () => {
@@ -59,5 +64,25 @@ describe('extractClientApp', () => {
 
   it('returns unknown when nothing is set', () => {
     expect(extractClientApp(undefined, undefined)).toBe('unknown');
+  });
+});
+
+describe('applyEndUserFromHeader', () => {
+  it('maps username header to body.user for chat completions', () => {
+    expect(applyEndUserFromHeader({ model: 'x' }, 'armin', 'chat/completions')).toEqual({
+      model: 'x',
+      user: 'armin',
+    });
+  });
+
+  it('does not override an existing body.user', () => {
+    expect(applyEndUserFromHeader({ user: 'kept' }, 'armin', 'chat/completions')).toEqual({ user: 'kept' });
+  });
+
+  it('maps username header to metadata.user_id for messages', () => {
+    expect(applyEndUserFromHeader({ model: 'x' }, 'armin', 'messages')).toEqual({
+      model: 'x',
+      metadata: { user_id: 'armin' },
+    });
   });
 });

@@ -557,6 +557,26 @@ textarea:focus {
   background: var(--accent-soft);
 }
 
+.param-table {
+  margin: 0.35rem 0 1rem;
+  font-size: 0.82rem;
+}
+
+.param-table th:last-child,
+.param-table td:last-child {
+  width: 55%;
+}
+
+.badge.param-required {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.badge.param-optional {
+  opacity: 0.85;
+}
+
 .response-meta {
   display: flex;
   align-items: center;

@@ -1245,6 +1245,14 @@ async function renderUsers(openModelsFor?: string): Promise<HTMLElement> {
 
 type EndpointAuth = 'token' | 'gateway' | 'none';
 
+interface EndpointParam {
+  name: string;
+  in: 'header' | 'query' | 'path' | 'body';
+  required: boolean;
+  type?: string;
+  description: string;
+}
+
 interface EndpointDef {
   id: string;
   group: string;
@@ -1254,6 +1262,7 @@ interface EndpointDef {
   auth: EndpointAuth;
   summary: string;
   body?: string;
+  params?: EndpointParam[];
 }
 
 /** Gateway routes sit beside `/api`, not under it: same origin behind nginx, host+port in dev. */
@@ -1575,17 +1584,179 @@ const RESPONSES_BODY = `{
   "model": "opencode-<model-slug>",
   "input": "Say hi in five words."
 }`;
+
+const GATEWAY_OPTIONAL_HEADERS: EndpointParam[] = [
+  {
+    name: 'client-app',
+    in: 'header',
+    required: false,
+    type: 'string',
+    description: 'Client label stored in request logs (chat, agent, extension, …).',
+  },
+  {
+    name: 'username',
+    in: 'header',
+    required: false,
+    type: 'string',
+    description: 'End-user id for this request (who invoked the client).',
+  },
+  {
+    name: 'x-opencode-session',
+    in: 'header',
+    required: false,
+    type: 'string',
+    description: 'Stable conversation id for OpenCode Go; Pont generates one if omitted.',
+  },
+];
+
+const CHAT_BODY_PARAMS: EndpointParam[] = [
+  {
+    name: 'model',
+    in: 'body',
+    required: true,
+    type: 'string',
+    description: 'Pont model id; prefix picks the provider (openrouter-…, opencode-…).',
+  },
+  {
+    name: 'messages',
+    in: 'body',
+    required: true,
+    type: 'array',
+    description: 'Chat turns with role and content (OpenAI chat format).',
+  },
+  { name: 'max_tokens', in: 'body', required: false, type: 'number', description: 'Upper bound on generated tokens.' },
+  { name: 'temperature', in: 'body', required: false, type: 'number', description: 'Sampling temperature.' },
+  { name: 'stream', in: 'body', required: false, type: 'boolean', description: 'Stream tokens with SSE when true.' },
+];
+
+const RESPONSES_BODY_PARAMS: EndpointParam[] = [
+  {
+    name: 'model',
+    in: 'body',
+    required: true,
+    type: 'string',
+    description: 'Pont model id; prefix picks the provider.',
+  },
+  {
+    name: 'input',
+    in: 'body',
+    required: true,
+    type: 'string | array',
+    description: 'Prompt or structured input for the Responses API.',
+  },
+  {
+    name: 'max_output_tokens',
+    in: 'body',
+    required: false,
+    type: 'number',
+    description: 'Cap on generated output tokens.',
+  },
+  { name: 'stream', in: 'body', required: false, type: 'boolean', description: 'Stream with SSE when true.' },
+];
+
+function authParamsForRoute(route: EndpointDef): EndpointParam[] {
+  if (route.auth === 'gateway') {
+    return [
+      {
+        name: 'Authorization',
+        in: 'header',
+        required: true,
+        type: 'Bearer pont_sk_…',
+        description: 'Gateway key. Session tokens are rejected on gateway routes.',
+      },
+    ];
+  }
+  if (route.auth === 'token') {
+    return [
+      {
+        name: 'Authorization',
+        in: 'header',
+        required: true,
+        type: 'Bearer session',
+        description: 'Session token from POST /api/login.',
+      },
+    ];
+  }
+  return [];
+}
+
+function renderEndpointParams(route: EndpointDef): string {
+  const rows = [...authParamsForRoute(route), ...(route.params ?? [])];
+  if (rows.length === 0) {
+    return '<p class="muted small">No parameters.</p>';
+  }
+  return `
+    <table class="param-table">
+      <thead><tr><th>Name</th><th>In</th><th></th><th>Description</th></tr></thead>
+      <tbody>
+        ${rows
+          .map(
+            (param) => `
+          <tr>
+            <td class="mono">${esc(param.name)}</td>
+            <td class="muted">${esc(param.in)}</td>
+            <td><span class="badge ${param.required ? 'param-required' : 'param-optional'}">${param.required ? 'Required' : 'Optional'}</span></td>
+            <td class="muted">${param.type ? `<span class="mono">${esc(param.type)}</span> — ` : ''}${esc(param.description)}</td>
+          </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>`;
+}
+
 const ENDPOINTS: EndpointDef[] = [
-  { id: 'unified-models', group: 'Gateway', method: 'GET', path: '/api/v1/models', base: 'gateway', auth: 'gateway', summary: 'All providers with a key, as Pont ids.' },
-  { id: 'unified-chat', group: 'Gateway', method: 'POST', path: '/api/v1/chat/completions', base: 'gateway', auth: 'gateway', summary: 'One endpoint; model prefix picks the provider.', body: CHAT_BODY },
-  { id: 'unified-responses', group: 'Gateway', method: 'POST', path: '/api/v1/responses', base: 'gateway', auth: 'gateway', summary: 'OpenAI Responses API; model prefix picks the provider.', body: RESPONSES_BODY },
+  {
+    id: 'unified-models',
+    group: 'Gateway',
+    method: 'GET',
+    path: '/api/v1/models',
+    base: 'gateway',
+    auth: 'gateway',
+    summary: 'All providers with a key, as Pont ids.',
+    params: [...GATEWAY_OPTIONAL_HEADERS],
+  },
+  {
+    id: 'unified-chat',
+    group: 'Gateway',
+    method: 'POST',
+    path: '/api/v1/chat/completions',
+    base: 'gateway',
+    auth: 'gateway',
+    summary: 'One endpoint; model prefix picks the provider.',
+    body: CHAT_BODY,
+    params: [...GATEWAY_OPTIONAL_HEADERS, ...CHAT_BODY_PARAMS],
+  },
+  {
+    id: 'unified-responses',
+    group: 'Gateway',
+    method: 'POST',
+    path: '/api/v1/responses',
+    base: 'gateway',
+    auth: 'gateway',
+    summary: 'OpenAI Responses API; model prefix picks the provider.',
+    body: RESPONSES_BODY,
+    params: [...GATEWAY_OPTIONAL_HEADERS, ...RESPONSES_BODY_PARAMS],
+  },
 
   { id: 'health', group: 'Health', method: 'GET', path: '/health', base: 'gateway', auth: 'none', summary: 'Liveness probe.' },
 
-  { id: 'login', group: 'API', method: 'POST', path: '/api/login', base: 'api', auth: 'none', summary: 'Exchange username/password for a session token.', body: `{
+  {
+    id: 'login',
+    group: 'API',
+    method: 'POST',
+    path: '/api/login',
+    base: 'api',
+    auth: 'none',
+    summary: 'Exchange username/password for a session token.',
+    body: `{
   "username": "<username>",
   "password": "<password>"
-}` },
+}`,
+    params: [
+      { name: 'username', in: 'body', required: true, type: 'string', description: 'Account username.' },
+      { name: 'password', in: 'body', required: true, type: 'string', description: 'Account password.' },
+    ],
+  },
 ];
 
 function renderEndpoints(): HTMLElement {
@@ -1661,6 +1832,8 @@ function renderEndpoints(): HTMLElement {
     tester.innerHTML = `
       <div class="panel-head"><h2>Try it</h2><span class="badge">${esc(selected.group)}</span></div>
       <p class="muted">${esc(selected.summary)}</p>
+      <h3>Parameters</h3>
+      ${renderEndpointParams(selected)}
       <label for="ep-url">Request URL <span class="muted">— replace <code>:param</code> segments</span></label>
       <div class="field-row">
         <span class="badge">${esc(selected.method)}</span>
