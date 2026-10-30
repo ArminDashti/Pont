@@ -992,8 +992,8 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
             <input id="provider-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key (empty clears)" />
           </label>
           <button type="button" id="provider-key-save" class="small">Save</button>
+          <p class="provider-key-status mono muted" id="provider-key-status"></p>
         </div>
-        <p class="provider-key-status mono muted" id="provider-key-status"></p>
       </div>
     </section>
   `);
