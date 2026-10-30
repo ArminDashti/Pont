@@ -83,14 +83,6 @@ function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** Icon-only mark for sidebar; full wordmark on login. Theme via prefers-color-scheme. */
-function brandIconHtml(): string {
-  return `<picture class="brand-mark">
-    <source media="(prefers-color-scheme: light)" srcset="${import.meta.env.BASE_URL}brand/light-icon.png" />
-    <img src="${import.meta.env.BASE_URL}brand/dark-icon.png" alt="" width="40" height="40" decoding="async" />
-  </picture>`;
-}
-
 function brandFullHtml(): string {
   return `<picture class="brand-full">
     <source media="(prefers-color-scheme: light)" srcset="${import.meta.env.BASE_URL}brand/light-full.png" />
@@ -221,7 +213,6 @@ async function render(): Promise<void> {
     <div class="shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}">
       <aside class="sidebar">
         <div class="sidebar-head">
-          <div class="brand" title="Pont">${brandIconHtml()}</div>
           <button type="button" class="sidebar-toggle secondary small" id="sidebar-toggle" aria-expanded="${sidebarCollapsed ? 'false' : 'true'}" aria-label="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}" title="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">${sidebarCollapsed ? '»' : '«'}</button>
         </div>
         <nav class="nav" id="nav"></nav>

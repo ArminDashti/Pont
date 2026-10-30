@@ -152,69 +152,25 @@ code {
 }
 
 .sidebar-head {
-  position: relative;
+  display: flex;
+  justify-content: flex-end;
   padding-bottom: 0.25rem;
 }
 
 .shell.sidebar-collapsed .sidebar-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
   padding-bottom: 0;
 }
 
 .sidebar-toggle {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 1;
   min-width: 2rem;
   padding-inline: 0.45rem;
   line-height: 1.2;
 }
 
-.shell.sidebar-collapsed .sidebar-toggle {
-  position: static;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.6rem;
-  font-weight: 650;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
-  padding-right: 2.35rem;
-  padding-top: 0.1rem;
-}
-
-.shell.sidebar-collapsed .brand {
-  justify-content: center;
-  padding-right: 0;
-  padding-top: 0;
-}
-
 .account-meta {
   font-size: 0.8rem;
   margin-top: 0.15rem;
-}
-
-.brand-mark {
-  display: block;
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  line-height: 0;
-  transition: width 0.18s ease, height 0.18s ease;
-}
-
-.brand-mark img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
 }
 
 .brand-full {
@@ -906,11 +862,6 @@ button.small {
   .shell.sidebar-collapsed .account-name,
   .shell.sidebar-collapsed .account-meta {
     display: block;
-  }
-
-  .brand-mark {
-    width: 2.5rem;
-    height: 2.5rem;
   }
 
   .sidebar {
