@@ -85,7 +85,6 @@ function esc(value: unknown): string {
 
 function brandFullHtml(): string {
   return `<picture class="brand-full">
-    <source media="(prefers-color-scheme: light)" srcset="${import.meta.env.BASE_URL}brand/light-full.png" />
     <img src="${import.meta.env.BASE_URL}brand/dark-full.png" alt="Pont" width="220" height="294" decoding="async" />
   </picture>`;
 }

@@ -1,58 +1,25 @@
-@import "./cursor-theme.css";
+@import "./yoda-admin-theme.css";
 
 :root {
-  --text: var(--fg);
-  --text-dim: var(--fg-muted);
-  --text-faint: var(--fg-placeholder);
-  --bg-raised: var(--bg-chrome);
-  --border-strong: var(--focus-ring);
-  --accent: var(--primary);
+  --fg-placeholder: var(--muted);
+  --bg-chrome: var(--surface);
+  --bg-elevated: var(--surface);
+  --bg-input: var(--surface);
+  --bg-hover: var(--bg);
+  --bg-selected: color-mix(in srgb, var(--accent) 18%, transparent);
+  --focus-ring: var(--border);
+  --primary-hover: color-mix(in srgb, var(--accent) 88%, #ffffff);
+  --link: var(--accent);
+  --text-dim: var(--muted);
+  --text-faint: var(--muted);
+  --bg-raised: var(--surface);
+  --border-strong: var(--border);
   --accent-soft: var(--bg-selected);
   --good: var(--success);
   --bad: var(--danger);
-  --radius: 12px;
+  --radius: 8px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg: #FCFCFC;
-    --bg-chrome: #F3F3F3;
-    --bg-elevated: #F3F3F3;
-    --bg-input: #FCFCFC;
-    --bg-hover: #14141414;
-    --bg-selected: #14141414;
-    --fg: #141414;
-    --fg-muted: #141414BD;
-    --fg-placeholder: #1414145C;
-    --border: #14141414;
-    --focus-ring: #14141433;
-    --primary: #2778C1;
-    --primary-fg: #FCFCFC;
-    --primary-hover: #246AAB;
-    --secondary: #14141424;
-    --secondary-fg: #141414;
-    --link: #0064B0;
-    --badge: #F3F3F3;
-    --badge-fg: #141414A8;
-    --success: #007041;
-    --warning: #CD4500;
-    --danger: #BE1744;
-    --info: #0064B0;
-    --scrollbar-thumb: #14141424;
-    --scrollbar-thumb-hover: #14141433;
-  }
-
-  select {
-    color-scheme: light;
-  }
-
-  select option {
-    background-color: var(--bg-input);
-    color: var(--fg);
-  }
 }
 
 * {
@@ -62,7 +29,7 @@
 body {
   margin: 0;
   background: var(--bg);
-  color: var(--text);
+  color: var(--fg);
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -203,14 +170,13 @@ code {
 }
 
 .nav-link:hover {
-  background: var(--bg-hover);
+  background: var(--bg);
   color: var(--text);
 }
 
 .nav-link.active {
-  background: var(--accent-soft);
-  color: var(--link);
-  font-weight: 550;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .nav-link-abbr {
@@ -404,6 +370,7 @@ th {
   font-weight: 550;
   padding: 0.45rem 0.6rem;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
   white-space: nowrap;
 }
 
@@ -474,14 +441,14 @@ th.sortable .th-sort:hover {
 
 .badge.good {
   color: var(--good);
-  border-color: rgba(67, 192, 138, 0.35);
-  background: rgba(67, 192, 138, 0.1);
+  border-color: color-mix(in srgb, var(--good) 35%, transparent);
+  background: color-mix(in srgb, var(--good) 12%, transparent);
 }
 
 .badge.bad {
   color: var(--bad);
-  border-color: rgba(242, 112, 122, 0.35);
-  background: rgba(242, 112, 122, 0.1);
+  border-color: color-mix(in srgb, var(--bad) 35%, transparent);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
 }
 
 .id-cell {

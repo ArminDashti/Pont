@@ -1,0 +1,36 @@
+/*
+ * Yoda Admin / control panel theme (source: Yoda webui /admin, e.g. /admin/overview).
+ * Live tokens: webui/src/style.css :root[data-theme='admin'] + shared accent/status vars.
+ * Apply on :root[data-theme='admin'] or :root / .yoda-admin. Dark-only (panel is always dark).
+ */
+:root[data-theme='admin'],
+:root.yoda-admin,
+.yoda-admin {
+  color-scheme: dark;
+
+  /* Surfaces — flat VS Code–style: canvas darker than chrome */
+  --bg: #1e1e1e; /* main content / table header wash / nav hover */
+  --surface: #252525; /* sidebar, cards, tables, inputs */
+  --border: #333333;
+
+  /* Text (Yoda uses --text; alias --fg for parity with cursor-theme.css) */
+  --text: #e0e0e0;
+  --fg: var(--text);
+  --muted: #9d9d9d;
+  --fg-muted: var(--muted);
+
+  /* Actions */
+  --accent: #2563eb;
+  --primary: var(--accent);
+  --primary-fg: #ffffff;
+
+  /* Status */
+  --danger: #b42318;
+  --danger-bg: #3b1d1b;
+  --live: #15803d;
+  --success: var(--live);
+
+  /* iOS-style switches (admin checkboxes) */
+  --switch-off: #39393d;
+  --switch-on: #34c759;
+}
