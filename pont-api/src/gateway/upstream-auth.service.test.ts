@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { UnauthorizedException } from '@nestjs/common';
+
 import type { ProviderDefinition } from '../providers/provider-definitions.js';
 import { UpstreamAuthService } from './upstream-auth.service.js';
 
@@ -24,5 +26,14 @@ describe('UpstreamAuthService', () => {
     const service = new UpstreamAuthService(users as never, providerKeys as never);
     expect(service.authorize('Bearer pont_sk_test')).toBe('armin');
     expect(service.resolveUpstreamApiKey('Bearer pont_sk_test', OPENCODE_GO)).toBe('upstream-key');
+  });
+
+  it('rejects session JWT and non-panel credentials on the gateway', () => {
+    const users = { resolveUsernameFromGatewayKey: vi.fn() };
+    const service = new UpstreamAuthService(users as never, { getKey: vi.fn() } as never);
+    expect(() => service.authorize('Bearer eyJhbG.a.b')).toThrow(UnauthorizedException);
+    expect(() => service.authorize('Bearer sk-or-v1-test')).toThrow(UnauthorizedException);
+    expect(() => service.authorize('Bearer oc_sk_test')).toThrow(UnauthorizedException);
+    expect(users.resolveUsernameFromGatewayKey).not.toHaveBeenCalled();
   });
 });

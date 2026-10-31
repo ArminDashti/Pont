@@ -81,7 +81,20 @@ export class EligibleModelsService {
     }
   }
 
-  /** Test and migration hook; no public admin API. */
+  hasExplicitAllowlist(): boolean {
+    return this.explicitEnabled() !== null;
+  }
+
+  gatewayEligibility(catalog: Array<{ id: string; providerId: ProviderId }>): {
+    explicit: boolean;
+    models: EligibleModelRow[];
+  } {
+    return {
+      explicit: this.hasExplicitAllowlist(),
+      models: this.rowsForCatalog(catalog),
+    };
+  }
+
   setEnabled(modelIds: string[]): string[] {
     const unique = [...new Set(modelIds.map((id) => id.trim()).filter(Boolean))];
     this.settings.set(STORAGE_KEY, JSON.stringify(unique));

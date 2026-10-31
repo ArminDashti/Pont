@@ -30,6 +30,7 @@ describe('EligibleModelsService', () => {
   it('honors an explicit allowlist after save', () => {
     const service = createService();
     service.setEnabled(['openrouter-openai/gpt-4o-mini']);
+    expect(service.hasExplicitAllowlist()).toBe(true);
     expect(service.isEnabled('openrouter-openai/gpt-4o-mini')).toBe(true);
     expect(service.isEnabled('opencode-deepseek-4-1-free')).toBe(false);
   });

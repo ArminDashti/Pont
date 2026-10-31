@@ -219,6 +219,32 @@ export class ApiController {
     return { models: await this.modelsCatalog.listCatalog() };
   }
 
+  @Get('models/eligibility')
+  async listGatewayModelEligibility(
+    @Req() req: Request,
+  ): Promise<{ explicit: boolean; models: EligibleModelRow[] }> {
+    this.auth.assertAdmin(req.headers.authorization);
+    const catalog = await this.buildPontModelCatalog();
+    return this.eligibleModels.gatewayEligibility(catalog);
+  }
+
+  @Put('models/eligibility')
+  async setGatewayModelEligibility(@Req() req: Request): Promise<{ enabled: string[] }> {
+    this.auth.assertAdmin(req.headers.authorization);
+    const body = await readJsonBody(req);
+    if (!isJsonObject(body) || !Array.isArray(body.enabled)) {
+      throw new BadRequestException('Body must include array "enabled" of Pont model ids');
+    }
+    const enabled: string[] = [];
+    for (const item of body.enabled) {
+      if (typeof item !== 'string') {
+        throw new BadRequestException('Each entry in "enabled" must be a string model id');
+      }
+      enabled.push(item);
+    }
+    return { enabled: this.eligibleModels.setEnabled(enabled) };
+  }
+
   private async buildPontModelCatalog(): Promise<Array<{ id: string; providerId: ProviderId }>> {
     const catalog: Array<{ id: string; providerId: ProviderId }> = [];
     for (const provider of this.registry.list()) {

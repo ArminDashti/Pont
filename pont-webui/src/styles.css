@@ -500,6 +500,63 @@ label.check {
   margin-top: 0.9rem;
 }
 
+label.switch-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+input.switch[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 13px;
+  background-color: var(--switch-off);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background-color 0.2s ease;
+}
+
+input.switch[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.18),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease;
+}
+
+input.switch[type='checkbox']:checked {
+  background-color: var(--switch-on);
+}
+
+input.switch[type='checkbox']:checked::after {
+  transform: translateX(18px);
+}
+
+input.switch[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input.switch[type='checkbox']:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 input {
   width: 100%;
   padding: 0.5rem 0.65rem;

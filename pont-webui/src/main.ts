@@ -728,6 +728,25 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   const sortKey = catalogSortKey(queryParam('sort'));
   const sortDir = queryParam('dir') === 'desc' ? 'desc' : 'asc';
   const { models } = await apiFetch<{ models: CatalogModelRow[] }>('/models');
+  const enabledById = new Map<string, boolean>();
+  let gatewayAllowlistExplicit = false;
+  if (isAdmin) {
+    const eligibility = await apiFetch<{ explicit: boolean; models: ModelAllowlistRow[] }>(
+      '/models/eligibility',
+    );
+    gatewayAllowlistExplicit = eligibility.explicit;
+    for (const row of eligibility.models) {
+      enabledById.set(row.id, row.enabled);
+    }
+    for (const row of models) {
+      if (!enabledById.has(row.id)) {
+        enabledById.set(
+          row.id,
+          gatewayAllowlistExplicit ? false : row.providerId === DEFAULT_MODELS_PROVIDER,
+        );
+      }
+    }
+  }
   const filtered = sortCatalogRows(
     filterCatalogRows(models, {
       provider: providerFilter,
@@ -738,7 +757,7 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
     sortDir,
   );
   const providerSelectValue = providerFilter;
-  const colCount = 9;
+  const colCount = isAdmin ? 10 : 9;
 
   const sortMark = (key: CatalogSortKey): string => {
     if (sortKey !== key) {
@@ -782,12 +801,14 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
             Search
             <input id="models-q" type="search" placeholder="Model, owner, id…" value="${esc(qFilter)}" />
           </label>
+          ${isAdmin ? '<p class="muted small" id="models-eligibility-status"></p>' : ''}
         </div>
         <p class="muted">${num(filtered.length)} of ${num(models.length)} models</p>
         <div class="table-scroll">
           <table>
             <thead>
               <tr>
+                ${isAdmin ? '<th class="num">Gateway</th>' : ''}
                 ${catalogTh('providerId', 'Provider')}
                 ${catalogTh('owner', 'Owner')}
                 ${catalogTh('model', 'Model')}
@@ -806,6 +827,70 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   `);
 
   const tbody = wrap.querySelector('#models-rows')!;
+  const eligibilityStatus = wrap.querySelector('#models-eligibility-status') as HTMLElement | null;
+
+  function syncEligibilityInputs(): void {
+    for (const input of wrap.querySelectorAll<HTMLInputElement>('input[data-model-enable]')) {
+      const id = input.dataset.modelEnable!;
+      input.checked = enabledById.get(id) ?? false;
+    }
+  }
+
+  async function persistGatewayEligibility(nextEnabled: string[]): Promise<void> {
+    if (!isAdmin) {
+      return;
+    }
+    if (eligibilityStatus) {
+      eligibilityStatus.textContent = 'Saving…';
+    }
+    for (const input of wrap.querySelectorAll<HTMLInputElement>('input[data-model-enable]')) {
+      input.disabled = true;
+    }
+    try {
+      const result = await apiFetch<{ enabled: string[] }>('/models/eligibility', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      gatewayAllowlistExplicit = true;
+      enabledById.clear();
+      for (const id of result.enabled) {
+        enabledById.set(id, true);
+      }
+      for (const row of models) {
+        if (!enabledById.has(row.id)) {
+          enabledById.set(row.id, false);
+        }
+      }
+      syncEligibilityInputs();
+      if (eligibilityStatus) {
+        eligibilityStatus.textContent = `${num(result.enabled.length)} model(s) enabled on gateway.`;
+      }
+    } catch (error) {
+      syncEligibilityInputs();
+      if (eligibilityStatus) {
+        eligibilityStatus.textContent = errorText(error);
+      }
+    } finally {
+      for (const input of wrap.querySelectorAll<HTMLInputElement>('input[data-model-enable]')) {
+        input.disabled = false;
+      }
+    }
+  }
+
+  function onGatewayToggle(modelId: string, nextOn: boolean): void {
+    const enabled = new Set<string>();
+    for (const [id, on] of enabledById) {
+      if (on) {
+        enabled.add(id);
+      }
+    }
+    if (nextOn) {
+      enabled.add(modelId);
+    } else {
+      enabled.delete(modelId);
+    }
+    void persistGatewayEligibility([...enabled].sort((a, b) => a.localeCompare(b)));
+  }
   if (filtered.length === 0) {
     let msg = 'No models match these filters.';
     if (models.length === 0) {
@@ -820,9 +905,13 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
     tbody.append(el(`<tr><td colspan="${colCount}" class="muted">${msg}</td></tr>`));
   } else {
     for (const row of filtered) {
-      tbody.append(
-        el(`
+      const gatewayOn = enabledById.get(row.id) ?? false;
+      const gatewayCell = isAdmin
+        ? `<td class="num"><label class="switch-cell" title="Allow this model on the gateway"><input type="checkbox" class="switch" data-model-enable="${esc(row.id)}" ${gatewayOn ? 'checked' : ''} aria-label="Enable ${esc(row.id)} on gateway" /></label></td>`
+        : '';
+      const tr = el(`
         <tr>
+          ${gatewayCell}
           <td>${esc(providerLabel(row.providerId))}</td>
           <td>${esc(catalogOwnerLabel(row.owner))}</td>
           <td class="mono">${esc(catalogModelSlug(row))}</td>
@@ -833,8 +922,14 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
           <td class="num mono">${esc(pricePerMillionUsd(row.outputToken))}</td>
           <td class="num mono">${esc(pricePerMillionUsd(row.outputCacheToken))}</td>
         </tr>
-      `),
-      );
+      `);
+      if (isAdmin) {
+        const toggle = tr.querySelector<HTMLInputElement>('input[data-model-enable]')!;
+        toggle.addEventListener('change', () => {
+          onGatewayToggle(row.id, toggle.checked);
+        });
+      }
+      tbody.append(tr);
     }
   }
 
@@ -1662,7 +1757,8 @@ function authParamsForRoute(route: EndpointDef): EndpointParam[] {
         in: 'header',
         required: true,
         type: 'Bearer pont_sk_…',
-        description: 'Gateway key. Session tokens are rejected on gateway routes.',
+        description:
+          'Per-user gateway key from the Pont panel (sign in with username/password, then reveal or rotate under Users). Session login tokens are rejected.',
       },
     ];
   }
@@ -1759,6 +1855,16 @@ const ENDPOINTS: EndpointDef[] = [
   },
 ];
 
+function authSelectOptions(route: EndpointDef): Array<{ value: EndpointAuth; label: string }> {
+  if (route.auth === 'gateway') {
+    return [{ value: 'gateway', label: 'Gateway key (from panel after sign-in)' }];
+  }
+  if (route.auth === 'token') {
+    return [{ value: 'token', label: 'Session token (signed in)' }];
+  }
+  return [{ value: 'none', label: 'None' }];
+}
+
 function renderEndpoints(): HTMLElement {
   const routes = ENDPOINTS;
   const wrap = el(`
@@ -1841,14 +1947,14 @@ function renderEndpoints(): HTMLElement {
       </div>
       <label for="ep-auth">Authorization</label>
       <select id="ep-auth">
-        <option value="token">Session token (signed in)</option>
-        <option value="gateway">Gateway key</option>
-        <option value="none">None</option>
+        ${authSelectOptions(selected)
+          .map((option) => `<option value="${esc(option.value)}">${esc(option.label)}</option>`)
+          .join('')}
       </select>
       <div id="ep-gateway" hidden>
         <label for="ep-key">Gateway key</label>
         <input id="ep-key" class="mono" placeholder="pont_sk_..." />
-        <p class="muted small">Gateway routes reject the session token. When signed in, Pont loads your current key from the server (not old browser storage).</p>
+        <p class="muted small">Only <code>pont_sk_…</code> keys issued for your account work here—not the login JWT. When signed in, Pont loads your key from the server.</p>
       </div>
       <label for="ep-body">Body (JSON)</label>
       <textarea id="ep-body" spellcheck="false" placeholder="${hasBody ? '' : 'No body for GET/DELETE.'}" ${hasBody ? '' : 'disabled'}></textarea>
@@ -1880,7 +1986,7 @@ function renderEndpoints(): HTMLElement {
     const hasBody = selected.method !== 'GET' && selected.method !== 'DELETE';
 
     const headers: Record<string, string> = {};
-    if (auth === 'token' && token()) {
+    if (auth === 'token' && selected.auth === 'token' && token()) {
       headers.Authorization = `Bearer ${token()}`;
     }
     if (auth === 'gateway') {

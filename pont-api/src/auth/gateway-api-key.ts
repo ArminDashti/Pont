@@ -1,6 +1,12 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-const PREFIX = 'pont_sk_';
+export const GATEWAY_API_KEY_PREFIX = 'pont_sk_';
+
+const PREFIX = GATEWAY_API_KEY_PREFIX;
+
+export function isPontGatewayApiKey(key: string): boolean {
+  return key.startsWith(PREFIX);
+}
 
 export function generateGatewayApiKey(): string {
   return `${PREFIX}${randomBytes(24).toString('base64url')}`;

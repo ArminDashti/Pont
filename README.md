@@ -35,6 +35,8 @@ pnpm --filter @pont/webui run dev
 
 ## Client usage
 
+Sign in to the WebUI with username and password, then reveal or rotate your **gateway key** (`pont_sk_…`) under **Users**. LLM clients must use that key—not the login session JWT, not OpenRouter/OpenCode upstream keys.
+
 ```http
 Authorization: Bearer <your pont gateway key>
 x-opencode-session: <optional-session-id>
