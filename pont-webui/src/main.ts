@@ -585,7 +585,7 @@ function catalogSortKey(raw: string | undefined): CatalogSortKey {
 }
 
 function upstreamSlugFromPontId(pontId: string): string {
-  const match = pontId.trim().match(/^(opencode|openrouter)-(.+)$/i);
+  const match = pontId.trim().match(/^(opencodego|opencode|openrouter)-(.+)$/i);
   if (!match) {
     return pontId;
   }
@@ -1672,11 +1672,11 @@ async function renderPlayground(me: UserRecord): Promise<HTMLElement> {
 }
 
 const CHAT_BODY = `{
-  "model": "opencode-<model-slug>",
+  "model": "opencodego-<model-slug>",
   "messages": [{ "role": "user", "content": "Say hi in five words." }]
 }`;
 const RESPONSES_BODY = `{
-  "model": "opencode-<model-slug>",
+  "model": "opencodego-<model-slug>",
   "input": "Say hi in five words."
 }`;
 

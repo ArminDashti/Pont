@@ -1,8 +1,8 @@
 import type { ProviderId } from '../providers/provider-definitions.js';
 
-const PONT_PROVIDER_PREFIX = /^(opencode|openrouter)-(.+)$/i;
+const PONT_PROVIDER_PREFIX = /^(opencodego|opencode|openrouter)-(.+)$/i;
 
-export type PontProviderPrefix = 'opencode' | 'openrouter';
+export type PontProviderPrefix = 'opencodego' | 'opencode' | 'openrouter';
 
 export interface ParsedPontModelId {
   pontPrefix: PontProviderPrefix;
@@ -12,12 +12,12 @@ export interface ParsedPontModelId {
 }
 
 export function pontPrefixForProvider(providerId: ProviderId): PontProviderPrefix {
-  return providerId === 'opencode-go' ? 'opencode' : 'openrouter';
+  return providerId === 'opencode-go' ? 'opencodego' : 'openrouter';
 }
 
 export function providerIdFromPontPrefix(prefix: string): ProviderId | undefined {
   const lower = prefix.toLowerCase();
-  if (lower === 'opencode') {
+  if (lower === 'opencodego' || lower === 'opencode') {
     return 'opencode-go';
   }
   if (lower === 'openrouter') {
