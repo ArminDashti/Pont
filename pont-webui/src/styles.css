@@ -354,6 +354,27 @@ code {
   margin-top: 0;
 }
 
+.filters-row-search {
+  flex: 1 1 16rem;
+  max-width: 28rem;
+}
+
+.search-field-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.search-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-field-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

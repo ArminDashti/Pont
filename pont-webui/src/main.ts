@@ -797,9 +797,12 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
               <option value="0"${freeFilter === '0' ? ' selected' : ''}>Paid only</option>
             </select>
           </label>
-          <label>
+          <label class="filters-row-search">
             Search
-            <input id="models-q" type="search" placeholder="Model, owner, id…" value="${esc(qFilter)}" />
+            <span class="search-field-row">
+              <input id="models-q" type="search" placeholder="Model, owner, id…" value="${esc(qFilter)}" />
+              <button type="button" class="secondary small" id="models-refresh" title="Reload catalog from providers">Refresh models</button>
+            </span>
           </label>
           ${isAdmin ? '<p class="muted small" id="models-eligibility-status"></p>' : ''}
         </div>
@@ -964,6 +967,20 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
       event.preventDefault();
       applyFilters();
     }
+  });
+  wrap.querySelector('#models-refresh')!.addEventListener('click', () => {
+    const refreshBtn = wrap.querySelector('#models-refresh') as HTMLButtonElement;
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing…';
+    navigate(
+      modelsRoute({
+        provider: providerSelectValue,
+        free: freeFilter,
+        q: qFilter,
+        sort: sortKey,
+        dir: sortDir,
+      }),
+    );
   });
 
   return wrap;
