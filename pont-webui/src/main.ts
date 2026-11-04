@@ -94,6 +94,42 @@ function userDisplayName(me: UserRecord): string {
   return name || me.username;
 }
 
+function profileInitials(me: UserRecord): string {
+  const first = me.firstName?.trim();
+  const last = me.lastName?.trim();
+  if (first && last) return (first.charAt(0) + last.charAt(0)).toUpperCase();
+  const parts = userDisplayName(me).split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  const fromUser = me.username.slice(0, 2);
+  return (fromUser || '?').toUpperCase();
+}
+
+function sidebarToggleSvg(collapsed: boolean): string {
+  if (collapsed) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>`;
+}
+
+const NAV_ICON: Record<string, string> = {
+  '/': '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+  '/providers':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M6 6h12"/><path d="M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6"/><path d="M9 12h6"/></svg>',
+  '/playground':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>',
+  '/logs':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
+  '/endpoints':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  '/users':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+};
+
+function navLinkHtml(href: string, label: string, active: boolean): string {
+  const icon = NAV_ICON[href] ?? NAV_ICON['/'];
+  return `<a class="nav-link${active ? ' active' : ''}" href="#${href}" title="${esc(label)}"><span class="nav-link-icon" aria-hidden="true">${icon}</span><span class="nav-link-label">${esc(label)}</span></a>`;
+}
+
 function route(): string {
   return (location.hash.replace(/^#/, '').split('?')[0]) || '/';
 }
@@ -208,18 +244,28 @@ async function render(): Promise<void> {
   document.title = `Pont · ${userDisplayName(me)}`;
 
   const sidebarCollapsed = readSidebarCollapsed();
+  const roleLabel = me.admin ? 'Administrator' : 'Member';
   const shell = el(`
     <div class="shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}">
       <aside class="sidebar">
-        <div class="sidebar-head">
-          <button type="button" class="sidebar-toggle secondary small" id="sidebar-toggle" aria-expanded="${sidebarCollapsed ? 'false' : 'true'}" aria-label="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}" title="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">${sidebarCollapsed ? '»' : '«'}</button>
+        <div class="sidebar-top">
+          <a class="sidebar-brand" href="#/" title="Pont overview">
+            <img class="sidebar-brand-mark" src="${import.meta.env.BASE_URL}brand/dark-icon.png" alt="" width="28" height="28" decoding="async" />
+            <span class="sidebar-brand-name">Pont</span>
+          </a>
+          <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-expanded="${sidebarCollapsed ? 'false' : 'true'}" aria-label="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}" title="${sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}">${sidebarToggleSvg(sidebarCollapsed)}</button>
         </div>
-        <nav class="nav" id="nav"></nav>
-        <div class="account">
-          <div class="account-name">${esc(userDisplayName(me))}</div>
-          <div class="account-meta muted mono">${esc(me.username)}</div>
-          <div class="account-role">${me.admin ? 'Administrator' : 'Member'}</div>
-          <button class="secondary small" id="logout">Sign out</button>
+        <p class="sidebar-section-label">Menu</p>
+        <nav class="nav" id="nav" aria-label="Main"></nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-user" title="${esc(userDisplayName(me))}">
+            <div class="sidebar-user-avatar" aria-hidden="true">${esc(profileInitials(me))}</div>
+            <div class="sidebar-user-text">
+              <div class="sidebar-user-name">${esc(userDisplayName(me))}</div>
+              <div class="sidebar-user-meta mono">${esc(me.username)} · ${esc(roleLabel)}</div>
+            </div>
+          </div>
+          <button type="button" class="sidebar-logout secondary small" id="logout"><span class="sidebar-logout-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span><span class="sidebar-logout-label">Sign out</span></button>
         </div>
       </aside>
       <main class="main" id="main"></main>
@@ -237,10 +283,7 @@ async function render(): Promise<void> {
   const nav = shell.querySelector('#nav')!;
   const navActive = target === '/user-models' ? '/users' : target;
   for (const [href, label] of links) {
-    const link = el(
-      `<a class="nav-link${navActive === href ? ' active' : ''}" href="#${href}" title="${esc(label)}"><span class="nav-link-full">${esc(label)}</span><span class="nav-link-abbr" aria-hidden="true">${esc(label.charAt(0))}</span></a>`,
-    );
-    nav.append(link);
+    nav.append(el(navLinkHtml(href, label, navActive === href)));
   }
   const shellRoot = shell as HTMLDivElement;
   shell.querySelector('#sidebar-toggle')!.addEventListener('click', () => {
@@ -250,7 +293,7 @@ async function render(): Promise<void> {
     toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
     toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-    toggle.textContent = collapsed ? '»' : '«';
+    toggle.innerHTML = sidebarToggleSvg(collapsed);
   });
   shell.querySelector('#logout')!.addEventListener('click', () => {
     setToken(null);
@@ -516,6 +559,10 @@ function providerLabel(id: string): string {
   return PONT_PROVIDER_OPTIONS.find((row) => row.id === id)?.label ?? id;
 }
 
+function providerSlug(id: string): string {
+  return id.replace(/[^a-z0-9-]/gi, '-');
+}
+
 function providerSelectOptions(selectedId: string): string {
   return PONT_PROVIDER_OPTIONS.map((row) => {
     const selected = selectedId === row.id;
@@ -717,7 +764,10 @@ function filterCatalogRows(
   });
 }
 
-async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
+async function buildModelsCatalogPanel(
+  isAdmin: boolean,
+  catalogModels?: CatalogModelRow[],
+): Promise<HTMLElement> {
   const rawProvider = queryParam('provider');
   const providerFilter =
     rawProvider && PONT_PROVIDER_OPTIONS.some((row) => row.id === rawProvider)
@@ -727,7 +777,8 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   const qFilter = queryParam('q') ?? '';
   const sortKey = catalogSortKey(queryParam('sort'));
   const sortDir = queryParam('dir') === 'desc' ? 'desc' : 'asc';
-  const { models } = await apiFetch<{ models: CatalogModelRow[] }>('/models');
+  const models =
+    catalogModels ?? (await apiFetch<{ models: CatalogModelRow[] }>('/models')).models;
   const enabledById = new Map<string, boolean>();
   let gatewayAllowlistExplicit = false;
   if (isAdmin) {
@@ -781,8 +832,23 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
   };
 
   const wrap = el(`
-      <div class="panel panel--flush-table">
-        <div class="filters-row">
+      <div class="panel panel--flush-table providers-catalog-panel">
+        <div class="panel-head providers-catalog-head">
+          <div>
+            <h2>Model catalog</h2>
+            <p class="muted small">${
+              isAdmin
+                ? 'Toggle gateway access in the first column. Sort columns by clicking headers.'
+                : 'Filter by provider, pricing tier, or search.'
+            }</p>
+          </div>
+          <p class="catalog-count-badge mono" aria-live="polite">
+            <span class="catalog-count-strong">${num(filtered.length)}</span>
+            <span class="catalog-count-sep muted">/</span>
+            <span class="muted">${num(models.length)}</span>
+          </p>
+        </div>
+        <div class="filters-row filters-row--catalog">
           <label>
             Provider
             <select id="models-provider">
@@ -800,15 +866,14 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
           <label class="filters-row-search">
             Search
             <span class="search-field-row">
-              <input id="models-q" type="search" placeholder="Model, owner, id…" value="${esc(qFilter)}" />
-              <button type="button" class="secondary small" id="models-refresh" title="Reload catalog from providers">Refresh models</button>
+              <input id="models-q" type="search" placeholder="Model, owner, id…" value="${esc(qFilter)}" aria-label="Search models" />
+              <button type="button" class="secondary small" id="models-refresh" title="Reload catalog from providers">Refresh</button>
             </span>
           </label>
-          ${isAdmin ? '<p class="muted small" id="models-eligibility-status"></p>' : ''}
+          ${isAdmin ? '<p class="muted small filters-eligibility" id="models-eligibility-status"></p>' : ''}
         </div>
-        <p class="muted">${num(filtered.length)} of ${num(models.length)} models</p>
-        <div class="table-scroll">
-          <table>
+        <div class="table-scroll providers-table-scroll">
+          <table class="providers-table">
             <thead>
               <tr>
                 ${isAdmin ? '<th class="num">Gateway</th>' : ''}
@@ -915,7 +980,7 @@ async function buildModelsCatalogPanel(isAdmin: boolean): Promise<HTMLElement> {
       const tr = el(`
         <tr>
           ${gatewayCell}
-          <td>${esc(providerLabel(row.providerId))}</td>
+          <td><span class="badge provider-badge provider-badge--${esc(providerSlug(row.providerId))}">${esc(providerLabel(row.providerId))}</span></td>
           <td>${esc(catalogOwnerLabel(row.owner))}</td>
           <td class="mono">${esc(catalogModelSlug(row))}</td>
           <td>${catalogIdCell(row)}</td>
@@ -1078,10 +1143,40 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
   const keys = await apiFetch<ProviderKeyStatus[]>('/providers');
   const byId = new Map(keys.map((row) => [row.id, row]));
   const initialId =
-    PONT_PROVIDER_OPTIONS.find((row) => byId.has(row.id))?.id ?? PONT_PROVIDER_OPTIONS[0].id;
+    PONT_PROVIDER_OPTIONS.find((opt) => (byId.get(opt.id)?.source ?? 'none') !== 'none')?.id ??
+    PONT_PROVIDER_OPTIONS[0].id;
+
+  function statusFor(id: string): ProviderKeyStatus {
+    return byId.get(id) ?? { id, source: 'none', maskedKey: undefined };
+  }
+
+  const configuredCount = PONT_PROVIDER_OPTIONS.filter(
+    (opt) => statusFor(opt.id).source !== 'none',
+  ).length;
+
+  const statusCards = PONT_PROVIDER_OPTIONS.map((opt) => {
+    const row = statusFor(opt.id);
+    const connected = row.source !== 'none';
+    return `
+      <button type="button" class="provider-status-card${connected ? ' is-connected' : ''}" data-provider-pick="${esc(opt.id)}" aria-pressed="false">
+        <span class="provider-status-card-top">
+          <span class="provider-status-name">${esc(opt.label)}</span>
+          <span class="badge ${connected ? 'good' : 'bad'}">${connected ? 'Connected' : 'Not set'}</span>
+        </span>
+        <span class="provider-status-meta mono">${connected ? esc(row.source) : 'No API key'}</span>
+      </button>`;
+  }).join('');
+
   const wrap = el(`
-    <section class="provider-keys">
-      <div class="panel">
+    <section class="provider-credentials" aria-labelledby="provider-credentials-title">
+      <div class="provider-status-grid" role="list" aria-label="Provider connection status">${statusCards}</div>
+      <div class="panel provider-key-panel">
+        <div class="panel-head">
+          <div>
+            <h2 id="provider-credentials-title">API credentials</h2>
+            <p class="muted small">${configuredCount} of ${PONT_PROVIDER_OPTIONS.length} providers configured</p>
+          </div>
+        </div>
         <div class="provider-key-row filters-row">
           <label>
             Provider
@@ -1093,7 +1188,7 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
             API key
             <input id="provider-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key (empty clears)" />
           </label>
-          <button type="button" id="provider-key-save" class="small">Save</button>
+          <button type="button" id="provider-key-save">Save key</button>
           <p class="provider-key-status mono muted" id="provider-key-status"></p>
         </div>
       </div>
@@ -1104,10 +1199,6 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
   const statusEl = wrap.querySelector('#provider-key-status')!;
   let storedMask: string | undefined;
   let keyEditing = false;
-
-  function statusFor(id: string): ProviderKeyStatus {
-    return byId.get(id) ?? { id, source: 'none', maskedKey: undefined };
-  }
 
   function showStoredKey(mask: string | undefined): void {
     storedMask = mask;
@@ -1151,8 +1242,30 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
     }
   });
 
+  function syncProviderCards(selectedId: string): void {
+    for (const card of wrap.querySelectorAll<HTMLButtonElement>('.provider-status-card')) {
+      const active = card.dataset.providerPick === selectedId;
+      card.classList.toggle('is-selected', active);
+      card.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+  }
+
   syncStatus(select.value);
-  select.addEventListener('change', () => syncStatus(select.value));
+  syncProviderCards(select.value);
+  select.addEventListener('change', () => {
+    syncStatus(select.value);
+    syncProviderCards(select.value);
+  });
+
+  for (const card of wrap.querySelectorAll<HTMLButtonElement>('[data-provider-pick]')) {
+    card.addEventListener('click', () => {
+      const id = card.dataset.providerPick!;
+      select.value = id;
+      syncStatus(id);
+      syncProviderCards(id);
+      input.focus();
+    });
+  }
 
   wrap.querySelector('#provider-key-save')!.addEventListener('click', async () => {
     const providerId = select.value;
@@ -1169,13 +1282,29 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
 }
 
 async function renderProvidersPage(me: UserRecord): Promise<HTMLElement> {
-  const page = el('<div class="page"></div>');
+  const { models } = await apiFetch<{ models: CatalogModelRow[] }>('/models');
+  const page = el('<div class="page providers-page"></div>');
+  page.append(
+    el(`
+      <header class="page-head providers-page-head">
+        <div>
+          <h1>Providers</h1>
+          <p class="muted">${
+            me.admin
+              ? 'Connect upstream APIs, browse models, and control which ones the gateway exposes.'
+              : 'Models available on your gateway with pricing and context limits from the catalog.'
+          }</p>
+        </div>
+        <div class="providers-head-meta">
+          <span class="catalog-count-badge mono" title="Total models in catalog">${num(models.length)}<span class="muted"> models</span></span>
+        </div>
+      </header>
+    `),
+  );
   if (me.admin) {
     page.append(await renderProviderKeySection());
   }
-  const catalogSection = el('<section class="provider-keys"><h2>Model catalog</h2></section>');
-  catalogSection.append(await buildModelsCatalogPanel(me.admin));
-  page.append(catalogSection);
+  page.append(await buildModelsCatalogPanel(me.admin, models));
   return page;
 }
 
