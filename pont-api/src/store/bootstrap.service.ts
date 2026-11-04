@@ -21,9 +21,9 @@ export class BootstrapService implements OnModuleInit {
     this.users.insert(
       {
         username: 'admin',
-        email: '',
-        firstName: 'Admin',
-        lastName: '',
+        email: 'admin@local.local',
+        firstName: 'admin',
+        lastName: 'admin',
         enabled: true,
         admin: true,
         gatewayApiKeyPrefix: gatewayKeyPrefix(gatewayApiKey),

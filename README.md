@@ -16,7 +16,7 @@ pnpm --filter @pont/webui run dev
 
 - API: http://127.0.0.1:9880
 - WebUI: http://127.0.0.1:9881
-- Default admin (empty DB): `admin` / `admin` — gateway key printed once in API logs on first boot
+- Default admin (empty DB): username/password `admin` / `admin`, email `admin@local.local`, first/last name `admin` — gateway key printed once in API logs on first boot
 
 ## Environment
 
