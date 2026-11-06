@@ -1,5 +1,6 @@
 import { DEFAULT_OPENCODE_GO_INFERENCE_BASE, normalizeOpenCodeGoBase } from '@pont/opencode-go';
 import { registerAs } from '@nestjs/config';
+import { resolve } from 'node:path';
 
 export const pontConfigKey = 'pont';
 
@@ -11,6 +12,7 @@ export interface PontConfig {
   port: number;
   jwtSecret: string;
   webuiOrigin: string;
+  webuiDist: string | undefined;
   openvpnSkip: boolean;
 }
 
@@ -26,6 +28,7 @@ export default registerAs(
     port: Number(process.env.PONT_PORT ?? 9880),
     jwtSecret: process.env.PONT_ADMIN_JWT_SECRET?.trim() || 'dev-change-me-pont-jwt-secret',
     webuiOrigin: process.env.PONT_WEBUI_ORIGIN?.trim() || 'http://127.0.0.1:9881',
+    webuiDist: process.env.PONT_WEBUI_DIST?.trim() ? resolve(process.env.PONT_WEBUI_DIST.trim()) : undefined,
     openvpnSkip: process.env.PONT_OPENVPN_SKIP === '1',
   }),
 );

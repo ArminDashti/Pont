@@ -1,8 +1,13 @@
 {
   "name": "unified-providers",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "build": "pnpm --filter @pont/api run build && pnpm --filter @pont/webui run build",
+    "build": "pnpm --filter @pont/api run build && VITE_PONT_API_BASE_URL=/api pnpm --filter @pont/webui run build",
+    "start": "PONT_WEBUI_DIST=pont-webui/dist node pont-api/dist/main.js",
     "dev:api": "pnpm --filter @pont/api run dev",
     "dev:webui": "pnpm --filter @pont/webui run dev",
     "test": "pnpm --filter @pont/api run test"

@@ -7,6 +7,7 @@ import { GatewayModule } from './gateway/gateway.module.js';
 import { HealthController } from './health/health.controller.js';
 import { ProviderCatalogModule } from './providers/provider-catalog.module.js';
 import { StoreModule } from './store/store.module.js';
+import { WebuiModule } from './webui/webui.module.js';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { StoreModule } from './store/store.module.js';
     ProviderCatalogModule,
     GatewayModule,
     ApiModule,
+    WebuiModule,
   ],
   controllers: [HealthController],
 })
