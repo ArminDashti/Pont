@@ -11,3 +11,6 @@ openvpn/auth.txt
 .cursor/hooks.json
 .cursor/agents/
 .cursor/tools/
+
+pont.db.bak-*
+*.db.bak*
