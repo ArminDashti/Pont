@@ -2,12 +2,16 @@ export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  inputCacheTokens: number;
+  outputCacheTokens: number;
 }
 
 interface UsageTotals {
   prompt: number;
   completion: number;
   total: number;
+  inputCache: number;
+  outputCache: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -19,7 +23,7 @@ function numberOf(...candidates: unknown[]): number | undefined {
 }
 
 /** Parses a JSON body or an SSE stream (`data:` lines) into JSON events. */
-function parseEvents(payload: string): unknown[] {
+export function parseEvents(payload: string): unknown[] {
   const trimmed = payload.trim();
   if (!trimmed) {
     return [];
@@ -65,13 +69,27 @@ function collectUsage(node: unknown, totals: UsageTotals): void {
     totals.prompt = Math.max(totals.prompt, numberOf(usage.prompt_tokens, usage.input_tokens) ?? 0);
     totals.completion = Math.max(totals.completion, numberOf(usage.completion_tokens, usage.output_tokens) ?? 0);
     totals.total = Math.max(totals.total, numberOf(usage.total_tokens) ?? 0);
+    const details = isRecord(usage.prompt_tokens_details) ? usage.prompt_tokens_details : null;
+    totals.inputCache = Math.max(
+      totals.inputCache,
+      numberOf(
+        usage.cache_read_input_tokens,
+        usage.cache_creation_input_tokens,
+        details?.cached_tokens,
+        usage.input_cache_read,
+      ) ?? 0,
+    );
+    totals.outputCache = Math.max(
+      totals.outputCache,
+      numberOf(usage.cache_creation_output_tokens, usage.output_cache_read) ?? 0,
+    );
   }
   collectUsage(node.message, totals);
   collectUsage(node.response, totals);
 }
 
 export function extractUsage(payload: string): TokenUsage {
-  const totals: UsageTotals = { prompt: 0, completion: 0, total: 0 };
+  const totals: UsageTotals = { prompt: 0, completion: 0, total: 0, inputCache: 0, outputCache: 0 };
   for (const event of parseEvents(payload)) {
     collectUsage(event, totals);
   }
@@ -79,5 +97,7 @@ export function extractUsage(payload: string): TokenUsage {
     promptTokens: totals.prompt,
     completionTokens: totals.completion,
     totalTokens: totals.total || totals.prompt + totals.completion,
+    inputCacheTokens: totals.inputCache,
+    outputCacheTokens: totals.outputCache,
   };
 }

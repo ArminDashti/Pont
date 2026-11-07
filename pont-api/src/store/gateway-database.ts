@@ -39,7 +39,8 @@ const SCHEMA = `
     admin INTEGER NOT NULL DEFAULT 0,
     password_hash TEXT,
     gateway_api_key_hash TEXT,
-    gateway_api_key_prefix TEXT NOT NULL DEFAULT ''
+    gateway_api_key_prefix TEXT NOT NULL DEFAULT '',
+    timezone TEXT NOT NULL DEFAULT 'UTC'
   );
   CREATE TABLE IF NOT EXISTS user_model_grants (
     username TEXT NOT NULL,
@@ -48,6 +49,28 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_user_model_grants_username ON user_model_grants (username);
 `;
+
+function tableColumns(db: DatabaseSync, table: string): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return new Set(rows.map((row) => row.name));
+}
+
+function addColumnIfMissing(db: DatabaseSync, table: string, column: string, definition: string): void {
+  if (!tableColumns(db, table).has(column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+function migrateSchema(db: DatabaseSync): void {
+  addColumnIfMissing(db, 'request_logs', 'session_id', 'TEXT NOT NULL DEFAULT ""');
+  addColumnIfMissing(db, 'request_logs', 'client_ip', 'TEXT NOT NULL DEFAULT ""');
+  addColumnIfMissing(db, 'request_logs', 'input_cache_tokens', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'request_logs', 'output_cache_tokens', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'request_logs', 'request_json', 'TEXT NOT NULL DEFAULT ""');
+  addColumnIfMissing(db, 'request_logs', 'response_capture', 'TEXT NOT NULL DEFAULT ""');
+  addColumnIfMissing(db, 'users', 'timezone', "TEXT NOT NULL DEFAULT 'UTC'");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_request_logs_session_id ON request_logs (session_id)');
+}
 
 @Injectable()
 export class GatewayDatabase implements OnModuleDestroy {
@@ -58,6 +81,7 @@ export class GatewayDatabase implements OnModuleDestroy {
     mkdirSync(dirname(resolve(dbPath)), { recursive: true });
     this.db = new DatabaseSync(dbPath);
     this.db.exec(SCHEMA);
+    migrateSchema(this.db);
   }
 
   onModuleDestroy(): void {

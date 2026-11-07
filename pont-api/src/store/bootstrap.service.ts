@@ -27,6 +27,7 @@ export class BootstrapService implements OnModuleInit {
         enabled: true,
         admin: true,
         gatewayApiKeyPrefix: gatewayKeyPrefix(gatewayApiKey),
+        timezone: 'UTC',
       },
       passwordHash,
       hashGatewayApiKey(gatewayApiKey),

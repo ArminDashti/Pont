@@ -1,0 +1,532 @@
+{
+  "package.json": {
+    "mtime": 1793209811.1482477,
+    "ast_hash": "6d30d5b01c3c4472de8fcad7afab2047",
+    "semantic_hash": ""
+  },
+  "packages/opencode-go/package.json": {
+    "mtime": 1793209811.1502478,
+    "ast_hash": "e5ed5986956037b4ca0e4e0b8d6c19ef",
+    "semantic_hash": ""
+  },
+  "packages/opencode-go/src/index.ts": {
+    "mtime": 1793209811.1512477,
+    "ast_hash": "1df64d1553b6bf470d301f219e32d285",
+    "semantic_hash": ""
+  },
+  "packages/opencode-go/src/opencodeGo.test.ts": {
+    "mtime": 1793209811.1519575,
+    "ast_hash": "c94c8465fea4c02a634e25896860e98d",
+    "semantic_hash": ""
+  },
+  "packages/opencode-go/src/opencodeGo.ts": {
+    "mtime": 1793209811.1529613,
+    "ast_hash": "428c6ec7051294020c9eb7174713f609",
+    "semantic_hash": ""
+  },
+  "packages/opencode-go/tsconfig.json": {
+    "mtime": 1793209811.1529613,
+    "ast_hash": "f560463888127ea25abf0edcdec7a3a8",
+    "semantic_hash": ""
+  },
+  "pont-api/nest-cli.json": {
+    "mtime": 1793209811.1589606,
+    "ast_hash": "fa439650fa28a1a7aa8c2b6d81c8cc20",
+    "semantic_hash": ""
+  },
+  "pont-api/package.json": {
+    "mtime": 1793209811.1599607,
+    "ast_hash": "803df77be4ab75ffa4c78a111352af74",
+    "semantic_hash": ""
+  },
+  "pont-api/src/api/api.controller.ts": {
+    "mtime": 1793912385.2466588,
+    "ast_hash": "339bb6267b3b012bb78666be0b74451b",
+    "semantic_hash": ""
+  },
+  "pont-api/src/api/api.module.ts": {
+    "mtime": 1793209811.1619606,
+    "ast_hash": "0e5286a4f048d8a48627c49c1a965e0c",
+    "semantic_hash": ""
+  },
+  "pont-api/src/app.module.ts": {
+    "mtime": 1793209811.1619606,
+    "ast_hash": "52dc1eb503989f76310f850ebe055a48",
+    "semantic_hash": ""
+  },
+  "pont-api/src/auth/api-auth.service.test.ts": {
+    "mtime": 1793209811.162964,
+    "ast_hash": "38ba6ab69b2f7b1322fe7b15648ff39e",
+    "semantic_hash": ""
+  },
+  "pont-api/src/auth/api-auth.service.ts": {
+    "mtime": 1793209811.1639643,
+    "ast_hash": "bab850ae77cbe561df759ccaf7f5a558",
+    "semantic_hash": ""
+  },
+  "pont-api/src/auth/bearer.ts": {
+    "mtime": 1793209811.1639643,
+    "ast_hash": "de9ab97844164884c22f82769dc9eafc",
+    "semantic_hash": ""
+  },
+  "pont-api/src/auth/gateway-api-key.ts": {
+    "mtime": 1793466433.5316632,
+    "ast_hash": "8eddae2ebc30705037ebc3b7166d0652",
+    "semantic_hash": ""
+  },
+  "pont-api/src/auth/jwt.ts": {
+    "mtime": 1793209811.1659644,
+    "ast_hash": "e553d8ba76bc1738ecc06cca211eacae",
+    "semantic_hash": ""
+  },
+  "pont-api/src/config/pont.config.ts": {
+    "mtime": 1793209811.1669643,
+    "ast_hash": "8ec1a908783815aed5e943cba7b0d3b4",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/gateway.module.ts": {
+    "mtime": 1793209811.1679647,
+    "ast_hash": "aec1e6dc83f7b53108b6d67c7aae0ae2",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/opencode-go-legacy.controller.ts": {
+    "mtime": 1793209811.1679647,
+    "ast_hash": "7ffaa7aa961db64439ba1ff464e70da8",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/provider-gateway.controller.ts": {
+    "mtime": 1793209811.1689644,
+    "ast_hash": "eac1db85461a17f7a63e745f08d9caeb",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/provider-proxy.service.test.ts": {
+    "mtime": 1793209811.1699643,
+    "ast_hash": "6b3131712563ba83baa6951ad0dc6f6d",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/provider-proxy.service.ts": {
+    "mtime": 1793912374.92444,
+    "ast_hash": "20169228b0ea2ca10fcb53c5cb33e28d",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/unified-gateway.controller.ts": {
+    "mtime": 1793209811.1709645,
+    "ast_hash": "d2c350b587699e43faf9757c217518af",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/upstream-auth.service.test.ts": {
+    "mtime": 1793466433.5316632,
+    "ast_hash": "fe221d4ea1a074ff28861777c77aea3b",
+    "semantic_hash": ""
+  },
+  "pont-api/src/gateway/upstream-auth.service.ts": {
+    "mtime": 1793466433.5316632,
+    "ast_hash": "091597f48a31bb31c48581a08c31635a",
+    "semantic_hash": ""
+  },
+  "pont-api/src/health/health.controller.ts": {
+    "mtime": 1793209811.173964,
+    "ast_hash": "9eac8de2cc1d225e1809a35d442a3584",
+    "semantic_hash": ""
+  },
+  "pont-api/src/http/read-json-body.ts": {
+    "mtime": 1793209811.1749642,
+    "ast_hash": "9db0e761b6700e75fa3e81af9bf954e5",
+    "semantic_hash": ""
+  },
+  "pont-api/src/logging/client-ip.ts": {
+    "mtime": 1793912247.448033,
+    "ast_hash": "cfad9cd715ecc74bc1d3c495c897c8c6",
+    "semantic_hash": ""
+  },
+  "pont-api/src/logging/conversation-parse.ts": {
+    "mtime": 1793912280.4087675,
+    "ast_hash": "9a15b591c493d1be4469ac89e1a4bcbc",
+    "semantic_hash": ""
+  },
+  "pont-api/src/logging/request-meta.test.ts": {
+    "mtime": 1793359893.4786112,
+    "ast_hash": "fc0416b7c1d8862e8aed4f6a9e58a374",
+    "semantic_hash": ""
+  },
+  "pont-api/src/logging/request-meta.ts": {
+    "mtime": 1793359874.3671818,
+    "ast_hash": "0c35612fd4647093be150b8da4113c49",
+    "semantic_hash": ""
+  },
+  "pont-api/src/logging/usage.test.ts": {
+    "mtime": 1793912406.6261084,
+    "ast_hash": "f6f544122889ef18681234e491180dca",
+    "semantic_hash": ""
+  },
+  "pont-api/src/logging/usage.ts": {
+    "mtime": 1793912276.1663404,
+    "ast_hash": "c5cb468a599d870afc9180847c18c8eb",
+    "semantic_hash": ""
+  },
+  "pont-api/src/main.ts": {
+    "mtime": 1793912677.767641,
+    "ast_hash": "39a206b649f80341bcfa5f1332729a65",
+    "semantic_hash": ""
+  },
+  "pont-api/src/models/pont-model-id.test.ts": {
+    "mtime": 1793209811.1794703,
+    "ast_hash": "c524c58b4f366a9f2ddc169ebde0f630",
+    "semantic_hash": ""
+  },
+  "pont-api/src/models/pont-model-id.ts": {
+    "mtime": 1793643383.034501,
+    "ast_hash": "a424abfbf8aadf340120798f0d94c787",
+    "semantic_hash": ""
+  },
+  "pont-api/src/models/transform-models-response.ts": {
+    "mtime": 1793209811.1804702,
+    "ast_hash": "80624d367b1447b13c949dc6e6d427e8",
+    "semantic_hash": ""
+  },
+  "pont-api/src/models/upstream-model-catalog.test.ts": {
+    "mtime": 1793338536.1048877,
+    "ast_hash": "448d9061d14aa09d20b600448426ab68",
+    "semantic_hash": ""
+  },
+  "pont-api/src/models/upstream-model-catalog.ts": {
+    "mtime": 1793338532.2085466,
+    "ast_hash": "2fa3e1706ce1d45a58eb168adaca64da",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/anthropic-bridge/anthropic-bridge.test.ts": {
+    "mtime": 1793209811.1844707,
+    "ast_hash": "078aa2ef2424e76703115e943ed88612",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/anthropic-bridge/anthropic-to-openai.ts": {
+    "mtime": 1793209811.1854703,
+    "ast_hash": "f895d0fa33b08eb55deb1fa49332b452",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/anthropic-bridge/json.ts": {
+    "mtime": 1793209811.1864707,
+    "ast_hash": "7a8315d305810e9fe66b6ccd1f13eb72",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/anthropic-bridge/openai-to-anthropic.ts": {
+    "mtime": 1793209811.1864707,
+    "ast_hash": "399a31811cafdd5fa37295d3e2d7cfc4",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/bearer-and-app-keys.test.ts": {
+    "mtime": 1793209811.1874697,
+    "ast_hash": "0edfe8623308e1232b7ce88b32de6feb",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/responses-bridge/openai-to-responses.ts": {
+    "mtime": 1793209811.1884718,
+    "ast_hash": "dd1e08910c23d19e8dfc4ab0d96a661a",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/responses-bridge/responses-bridge.test.ts": {
+    "mtime": 1793209811.1894712,
+    "ast_hash": "b2ae8606906ae304ed11d872bacfba2c",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/responses-bridge/responses-to-openai.ts": {
+    "mtime": 1793209811.1904707,
+    "ast_hash": "5525644263c5d5ead761da4fc084d666",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/sampling.util.test.ts": {
+    "mtime": 1793209811.1904707,
+    "ast_hash": "8bc2e8dc39dddebb248bcefac3642f66",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/sampling.util.ts": {
+    "mtime": 1793209811.1914706,
+    "ast_hash": "79ab013694ca4a8bc472dafab67da8f2",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/session.util.test.ts": {
+    "mtime": 1793209811.1924706,
+    "ast_hash": "6a33f0f7b57c602bc79978fac0bb9f37",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/session.util.ts": {
+    "mtime": 1793209811.1924706,
+    "ast_hash": "0217f5ee21e044d3ce8966424c60d3d7",
+    "semantic_hash": ""
+  },
+  "pont-api/src/opencode-go/upstream-url.ts": {
+    "mtime": 1793209811.1934714,
+    "ast_hash": "783f587fa048cb0105ab46d464ebacbd",
+    "semantic_hash": ""
+  },
+  "pont-api/src/providers/provider-auth.ts": {
+    "mtime": 1793209811.1944711,
+    "ast_hash": "6152e05622bf4c8479d2dfa1cfa5b62d",
+    "semantic_hash": ""
+  },
+  "pont-api/src/providers/provider-catalog.module.ts": {
+    "mtime": 1793209811.1944711,
+    "ast_hash": "a6f5b0063bf8b0f23ac18ea51d8877e1",
+    "semantic_hash": ""
+  },
+  "pont-api/src/providers/provider-definitions.ts": {
+    "mtime": 1793209811.1954708,
+    "ast_hash": "7b0077006439b50dc1179c780aec7a82",
+    "semantic_hash": ""
+  },
+  "pont-api/src/providers/provider-registry.service.ts": {
+    "mtime": 1793209811.1964738,
+    "ast_hash": "c7bc33efe111a1be299e26cda8059294",
+    "semantic_hash": ""
+  },
+  "pont-api/src/providers/provider-test.service.test.ts": {
+    "mtime": 1793340420.2198663,
+    "ast_hash": "685cac5f0d53f16f4e0fb43e607f0b99",
+    "semantic_hash": ""
+  },
+  "pont-api/src/providers/provider-test.service.ts": {
+    "mtime": 1793340420.220866,
+    "ast_hash": "5a48e9ec904a1561aa1dd332a8a91fe7",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/app-config.service.test.ts": {
+    "mtime": 1793209811.1984704,
+    "ast_hash": "54994075f4817ccaa00fc4c05c6ac287",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/app-config.service.ts": {
+    "mtime": 1793209811.1994708,
+    "ast_hash": "78544d6aa1508069ede2bbaca491da46",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/app-model.service.ts": {
+    "mtime": 1793209811.1994708,
+    "ast_hash": "ad7045fb64e6b5089e140cb4fb518d76",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/eligible-models.service.test.ts": {
+    "mtime": 1793466433.5316632,
+    "ast_hash": "f11c3e92ac9bbd0e43b17c10b96a6d9b",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/eligible-models.service.ts": {
+    "mtime": 1793466433.5316632,
+    "ast_hash": "efcd492db8c0a91dc792bb37c594ce46",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/models-catalog.service.ts": {
+    "mtime": 1793291622.658969,
+    "ast_hash": "b0fbc8c0ca75d98f62ff77c1647972a1",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/password.test.ts": {
+    "mtime": 1793209811.202471,
+    "ast_hash": "21ec365f41ace5f3eb1aaf58038afef3",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/password.ts": {
+    "mtime": 1793209811.2034714,
+    "ast_hash": "cf5aba10e9545281d367c9f1d21793a0",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/provider-keys.service.ts": {
+    "mtime": 1793314321.5664208,
+    "ast_hash": "7894701fc432efc9bccf807c9e330e07",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/services.service.ts": {
+    "mtime": 1793209811.2044737,
+    "ast_hash": "f79953c79152be3b237a0c85710c4d45",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/users.service.test.ts": {
+    "mtime": 1793209811.2054708,
+    "ast_hash": "db3c6bcaa4d0d29e4de3ccb78dd9e19f",
+    "semantic_hash": ""
+  },
+  "pont-api/src/settings/users.service.ts": {
+    "mtime": 1793912366.9283974,
+    "ast_hash": "04c6787f073372dd73b93216754e89d7",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/bootstrap.service.test.ts": {
+    "mtime": 1793820276.9214299,
+    "ast_hash": "80d7567d6e7bdf84923225a75eeed44f",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/bootstrap.service.ts": {
+    "mtime": 1793912686.6834986,
+    "ast_hash": "d54fb303c5fbba13880ca0faac3aa2da",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/gateway-database.ts": {
+    "mtime": 1793912393.7356753,
+    "ast_hash": "754ab2e64a6de57e665ee1ee3d327802",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/request-events.service.ts": {
+    "mtime": 1793209811.2084703,
+    "ast_hash": "1c1d891a5dff912f8ce6cab808e23df3",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/request-log.repository.test.ts": {
+    "mtime": 1793912396.6097896,
+    "ast_hash": "03c55de3bd5ad5f2a9942a938b857604",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/request-log.repository.ts": {
+    "mtime": 1793912690.7558305,
+    "ast_hash": "985765bd5680cf65762d3b725facc5ba",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/settings.repository.ts": {
+    "mtime": 1793209811.2094703,
+    "ast_hash": "c794c05aabefe914af5f356e43c5bc53",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/store.module.ts": {
+    "mtime": 1793209811.2104704,
+    "ast_hash": "dfbd09d8174d3af73095301e6a405527",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/user-models.repository.ts": {
+    "mtime": 1793209811.2104704,
+    "ast_hash": "c253f589cade9100c2d56191e7410601",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/users.repository.test.ts": {
+    "mtime": 1793209811.2114701,
+    "ast_hash": "b1f6a93bfc5323ed6117c664acee3955",
+    "semantic_hash": ""
+  },
+  "pont-api/src/store/users.repository.ts": {
+    "mtime": 1793912347.0440555,
+    "ast_hash": "75e50d2c0d018b6c471c7c412a5e350c",
+    "semantic_hash": ""
+  },
+  "pont-api/src/vpn/vpn-status.service.test.ts": {
+    "mtime": 1793209811.2124703,
+    "ast_hash": "1fa23d2ce6e591c34aebab3e168014bf",
+    "semantic_hash": ""
+  },
+  "pont-api/src/vpn/vpn-status.service.ts": {
+    "mtime": 1793209811.2134712,
+    "ast_hash": "37ef61808963998277980bec01bef795",
+    "semantic_hash": ""
+  },
+  "pont-api/tsconfig.build.json": {
+    "mtime": 1793209811.2144706,
+    "ast_hash": "88ff9513e2fc121ee71974f79d0c6fa1",
+    "semantic_hash": ""
+  },
+  "pont-api/tsconfig.json": {
+    "mtime": 1793209811.2144706,
+    "ast_hash": "97d56c6f7ee9001e32fba13d25a11127",
+    "semantic_hash": ""
+  },
+  "pont-api/vitest.config.ts": {
+    "mtime": 1793209811.21547,
+    "ast_hash": "3afc875f7e04de15d0271eb47503d12c",
+    "semantic_hash": ""
+  },
+  "pont-webui/package.json": {
+    "mtime": 1793209811.218471,
+    "ast_hash": "847e16c82fdcc5fdb28b68fe5b03a3c7",
+    "semantic_hash": ""
+  },
+  "pont-webui/src/api.ts": {
+    "mtime": 1793209811.2284713,
+    "ast_hash": "7d03571e68ca57fe6aaed61f98db89da",
+    "semantic_hash": ""
+  },
+  "pont-webui/src/main.ts": {
+    "mtime": 1793913503.8857465,
+    "ast_hash": "770b077f5f1705b1c468087c7fb68005",
+    "semantic_hash": ""
+  },
+  "pont-webui/tsconfig.json": {
+    "mtime": 1793209811.2314188,
+    "ast_hash": "9f3631106c9ab4e4170135c20557459f",
+    "semantic_hash": ""
+  },
+  "pont-webui/vite.config.ts": {
+    "mtime": 1793209811.2326329,
+    "ast_hash": "e743e639a9ac0b76634cea1184fb5e27",
+    "semantic_hash": ""
+  },
+  "scripts/entrypoint.sh": {
+    "mtime": 1793209811.2348204,
+    "ast_hash": "f5481b244c5f3055e317f4d688eced03",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1793820277.2344415,
+    "ast_hash": "79588cc2f412df39d4f4d5e6491129d3",
+    "semantic_hash": ""
+  },
+  "docker-compose.yml": {
+    "mtime": 1793340420.218866,
+    "ast_hash": "7032fef1337b4c3610ccd091f022da29",
+    "semantic_hash": ""
+  },
+  "openvpn/README.md": {
+    "mtime": 1793209811.1482477,
+    "ast_hash": "62a76ad3f7bb331770a84a44110b9b84",
+    "semantic_hash": ""
+  },
+  "pnpm-workspace.yaml": {
+    "mtime": 1793209811.1559608,
+    "ast_hash": "bba31c33d2f76fce55906767e8ffd6d5",
+    "semantic_hash": ""
+  },
+  "pont-api/README.md": {
+    "mtime": 1793209811.157961,
+    "ast_hash": "76bae006fe584ca241ccd2e53344b93a",
+    "semantic_hash": ""
+  },
+  "pont-webui/index.html": {
+    "mtime": 1793352495.6263137,
+    "ast_hash": "d18ea7d37b693538614ec8b23e99f472",
+    "semantic_hash": ""
+  },
+  "docs/Pont-User-Guide-FA.pdf": {
+    "mtime": 1793209811.1450639,
+    "ast_hash": "301508a03688fa9fd2c48d4568d6279a",
+    "semantic_hash": ""
+  },
+  "docs/UnifiedProviders-User-Guide.pdf": {
+    "mtime": 1793209811.147064,
+    "ast_hash": "77b676bf436646a0f4ff32b26db9cdcd",
+    "semantic_hash": ""
+  },
+  "Gemini_Generated_Image_mhrq5mmhrq5mmhrq.jpg": {
+    "mtime": 1793209811.1340635,
+    "ast_hash": "d8ae7a8efb6e0cf16cd8bf3511dd02bd",
+    "semantic_hash": ""
+  },
+  "Gemini_Generated_Image_tpgyybtpgyybtpgy.jpg": {
+    "mtime": 1793209811.1370642,
+    "ast_hash": "70074ee0aa1803f0f2b328e5bd7f4c04",
+    "semantic_hash": ""
+  },
+  "pont-webui/public/brand/dark-full.png": {
+    "mtime": 1793209811.2204714,
+    "ast_hash": "00ab8a290e726e8b781b2e734188a4c5",
+    "semantic_hash": ""
+  },
+  "pont-webui/public/brand/dark-icon.png": {
+    "mtime": 1793209811.2214737,
+    "ast_hash": "e2032c7891d395a603ddff8de09c700e",
+    "semantic_hash": ""
+  },
+  "pont-webui/public/brand/light-full.png": {
+    "mtime": 1793209811.2254708,
+    "ast_hash": "9dbae76b1517733013f0d82fa376ff2b",
+    "semantic_hash": ""
+  },
+  "pont-webui/public/brand/light-icon.png": {
+    "mtime": 1793209811.2274709,
+    "ast_hash": "b1933f3561c6ccf4cc83aeb65f9c9354",
+    "semantic_hash": ""
+  }
+}

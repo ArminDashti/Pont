@@ -195,6 +195,24 @@ export class UsersService {
       enabled: body.enabled as boolean,
       admin: body.admin as boolean,
       gatewayApiKeyPrefix: existing?.gatewayApiKeyPrefix ?? '',
+      timezone: existing?.timezone ?? 'UTC',
     };
+  }
+
+  updatePreferences(username: string, body: unknown): UserRecord {
+    if (!isJsonObject(body)) {
+      throw new BadRequestException('Body must be a JSON object');
+    }
+    const timezoneRaw = body.timezone;
+    if (typeof timezoneRaw !== 'string' || !timezoneRaw.trim()) {
+      throw new BadRequestException('"timezone" must be a non-empty IANA timezone string');
+    }
+    const timezone = timezoneRaw.trim();
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+    } catch {
+      throw new BadRequestException(`Unknown timezone "${timezone}"`);
+    }
+    return this.users.setTimezone(username, timezone);
   }
 }

@@ -10,6 +10,7 @@ export interface UserRecord {
   enabled: boolean;
   admin: boolean;
   gatewayApiKeyPrefix: string;
+  timezone: string;
 }
 
 interface UserRow {
@@ -20,6 +21,7 @@ interface UserRow {
   enabled: number;
   admin: number;
   gateway_api_key_prefix: string;
+  timezone: string;
 }
 
 function toRecord(row: UserRow): UserRecord {
@@ -31,6 +33,7 @@ function toRecord(row: UserRow): UserRecord {
     enabled: row.enabled === 1,
     admin: row.admin === 1,
     gatewayApiKeyPrefix: row.gateway_api_key_prefix,
+    timezone: row.timezone || 'UTC',
   };
 }
 
@@ -45,7 +48,9 @@ export class UsersRepository {
 
   list(): UserRecord[] {
     const rows = this.database.db
-      .prepare('SELECT username, email, first_name, last_name, enabled, admin, gateway_api_key_prefix FROM users ORDER BY username COLLATE NOCASE')
+      .prepare(
+        'SELECT username, email, first_name, last_name, enabled, admin, gateway_api_key_prefix, timezone FROM users ORDER BY username COLLATE NOCASE',
+      )
       .all() as unknown as UserRow[];
     return rows.map(toRecord);
   }
@@ -53,7 +58,7 @@ export class UsersRepository {
   findByUsername(username: string): UserRecord | undefined {
     const row = this.database.db
       .prepare(
-        'SELECT username, email, first_name, last_name, enabled, admin, gateway_api_key_prefix FROM users WHERE username = ?',
+        'SELECT username, email, first_name, last_name, enabled, admin, gateway_api_key_prefix, timezone FROM users WHERE username = ?',
       )
       .get(username) as unknown as UserRow | undefined;
     return row ? toRecord(row) : undefined;
@@ -89,8 +94,8 @@ export class UsersRepository {
     this.database.db
       .prepare(
         `INSERT INTO users (username, email, first_name, last_name, enabled, admin, password_hash,
-                            gateway_api_key_hash, gateway_api_key_prefix)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            gateway_api_key_hash, gateway_api_key_prefix, timezone)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         user.username,
@@ -102,6 +107,7 @@ export class UsersRepository {
         passwordHash,
         gatewayKeyHash,
         gatewayKeyPrefix,
+        user.timezone || 'UTC',
       );
     return user;
   }
@@ -123,6 +129,15 @@ export class UsersRepository {
          WHERE username = ?`,
       )
       .run(user.email, user.firstName, user.lastName, Number(user.enabled), Number(user.admin), user.username);
+    return user;
+  }
+
+  setTimezone(username: string, timezone: string): UserRecord {
+    this.database.db.prepare('UPDATE users SET timezone = ? WHERE username = ?').run(timezone, username);
+    const user = this.findByUsername(username);
+    if (!user) {
+      throw new Error(`User "${username}" not found after timezone update`);
+    }
     return user;
   }
 

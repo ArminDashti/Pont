@@ -5,7 +5,13 @@ import { extractUsage } from './usage.js';
 describe('extractUsage', () => {
   it('reads OpenAI chat usage from a JSON body', () => {
     const body = JSON.stringify({ usage: { prompt_tokens: 12, completion_tokens: 4, total_tokens: 16 } });
-    expect(extractUsage(body)).toEqual({ promptTokens: 12, completionTokens: 4, totalTokens: 16 });
+    expect(extractUsage(body)).toEqual({
+      promptTokens: 12,
+      completionTokens: 4,
+      totalTokens: 16,
+      inputCacheTokens: 0,
+      outputCacheTokens: 0,
+    });
   });
 
   it('reads the final usage chunk from an OpenAI chat SSE stream', () => {
@@ -15,7 +21,13 @@ describe('extractUsage', () => {
       'data: [DONE]',
       '',
     ].join('\n');
-    expect(extractUsage(stream)).toEqual({ promptTokens: 7, completionTokens: 2, totalTokens: 9 });
+    expect(extractUsage(stream)).toEqual({
+      promptTokens: 7,
+      completionTokens: 2,
+      totalTokens: 9,
+      inputCacheTokens: 0,
+      outputCacheTokens: 0,
+    });
   });
 
   it('merges Anthropic messages usage split across message_start and message_delta', () => {
@@ -26,7 +38,13 @@ describe('extractUsage', () => {
       'data: {"type":"message_delta","usage":{"output_tokens":15}}',
       '',
     ].join('\n');
-    expect(extractUsage(stream)).toEqual({ promptTokens: 25, completionTokens: 15, totalTokens: 40 });
+    expect(extractUsage(stream)).toEqual({
+      promptTokens: 25,
+      completionTokens: 15,
+      totalTokens: 40,
+      inputCacheTokens: 0,
+      outputCacheTokens: 0,
+    });
   });
 
   it('reads responses API usage from the response.completed event', () => {
@@ -35,11 +53,36 @@ describe('extractUsage', () => {
       'data: {"type":"response.completed","response":{"usage":{"input_tokens":30,"output_tokens":5,"total_tokens":35}}}',
       '',
     ].join('\n');
-    expect(extractUsage(stream)).toEqual({ promptTokens: 30, completionTokens: 5, totalTokens: 35 });
+    expect(extractUsage(stream)).toEqual({
+      promptTokens: 30,
+      completionTokens: 5,
+      totalTokens: 35,
+      inputCacheTokens: 0,
+      outputCacheTokens: 0,
+    });
   });
 
   it('returns zeros when no usage is present', () => {
-    expect(extractUsage('')).toEqual({ promptTokens: 0, completionTokens: 0, totalTokens: 0 });
-    expect(extractUsage('not json at all')).toEqual({ promptTokens: 0, completionTokens: 0, totalTokens: 0 });
+    expect(extractUsage('')).toEqual({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      inputCacheTokens: 0,
+      outputCacheTokens: 0,
+    });
+    expect(extractUsage('not json at all')).toEqual({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      inputCacheTokens: 0,
+      outputCacheTokens: 0,
+    });
+  });
+
+  it('reads cached input tokens from prompt_tokens_details', () => {
+    const body = JSON.stringify({
+      usage: { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 6 } },
+    });
+    expect(extractUsage(body).inputCacheTokens).toBe(6);
   });
 });

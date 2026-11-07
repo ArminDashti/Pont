@@ -6,6 +6,7 @@ import {
   MessageEvent,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -30,8 +31,12 @@ import { RequestEventsService } from '../store/request-events.service.js';
 import { VpnStatusService, type VpnStatus } from '../vpn/vpn-status.service.js';
 import {
   RequestLogRepository,
+  type LogFilterOptions,
+  type RequestLogQuery,
   type RequestLogRecord,
   type RequestStats,
+  type SessionConversation,
+  type SessionLogSummary,
 } from '../store/request-log.repository.js';
 import type { UserRecord } from '../store/users.repository.js';
 
@@ -102,6 +107,12 @@ export class ApiController {
     return this.users.rotateGatewayKey(username);
   }
 
+  @Patch('me/preferences')
+  async patchPreferences(@Req() req: Request): Promise<UserRecord> {
+    const { username } = this.auth.assertUser(req.headers.authorization);
+    return this.users.updatePreferences(username, await readJsonBody(req));
+  }
+
   @Get('users')
   listUsers(@Req() req: Request): UserRecord[] {
     this.auth.assertAdmin(req.headers.authorization);
@@ -148,14 +159,97 @@ export class ApiController {
     @Query('app') app?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('user') user?: string,
+    @Query('providerModel') providerModel?: string,
+    @Query('status') status?: string,
+    @Query('session') session?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ): { items: RequestLogRecord[]; total: number } {
     const { username, admin } = this.auth.assertUser(req.headers.authorization);
-    return this.requestLogs.list({
-      app: app?.trim() || undefined,
-      username: admin ? undefined : username,
-      limit: parseIntParam(limit, 50, 1, MAX_PAGE_SIZE),
-      offset: parseIntParam(offset, 0, 0, Number.MAX_SAFE_INTEGER),
-    });
+    return this.requestLogs.listPrompts(this.logQuery(req, { app, limit, offset, user, providerModel, status, session, from, to }));
+  }
+
+  @Get('logs/prompts')
+  listLogPrompts(
+    @Req() req: Request,
+    @Query('app') app?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('user') user?: string,
+    @Query('providerModel') providerModel?: string,
+    @Query('status') status?: string,
+    @Query('session') session?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): { items: RequestLogRecord[]; total: number } {
+    this.auth.assertUser(req.headers.authorization);
+    return this.requestLogs.listPrompts(this.logQuery(req, { app, limit, offset, user, providerModel, status, session, from, to }));
+  }
+
+  @Get('logs/sessions')
+  listLogSessions(
+    @Req() req: Request,
+    @Query('app') app?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('user') user?: string,
+    @Query('providerModel') providerModel?: string,
+    @Query('status') status?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): { items: SessionLogSummary[]; total: number } {
+    this.auth.assertUser(req.headers.authorization);
+    return this.requestLogs.listSessions(this.logQuery(req, { app, limit, offset, user, providerModel, status, from, to }));
+  }
+
+  @Get('logs/sessions/:sessionId')
+  logSessionDetail(@Req() req: Request, @Param('sessionId') sessionId: string): SessionConversation {
+    const { username, admin } = this.auth.assertUser(req.headers.authorization);
+    const conversation = this.requestLogs.getSessionConversation(
+      sessionId.trim(),
+      admin ? undefined : username,
+    );
+    if (!conversation) {
+      throw new NotFoundException('Session not found');
+    }
+    return conversation;
+  }
+
+  @Get('logs/prompts/:id')
+  logPromptDetail(@Req() req: Request, @Param('id') id: string): RequestLogRecord {
+    const { username, admin } = this.auth.assertUser(req.headers.authorization);
+    const row = this.requestLogs.getPrompt(Number(id), admin ? undefined : username);
+    if (!row) {
+      throw new NotFoundException('Log entry not found');
+    }
+    return row;
+  }
+
+  @Get('logs/filter-options')
+  logFilterOptions(@Req() req: Request): LogFilterOptions {
+    const { username, admin } = this.auth.assertUser(req.headers.authorization);
+    return this.requestLogs.filterOptions(admin ? undefined : username);
+  }
+
+  @Delete('logs/:id')
+  deleteLogPrompt(@Req() req: Request, @Param('id') id: string): { id: number } {
+    const { username, admin } = this.auth.assertUser(req.headers.authorization);
+    const ok = this.requestLogs.deletePrompt(Number(id), admin ? undefined : username);
+    if (!ok) {
+      throw new NotFoundException('Log entry not found');
+    }
+    return { id: Number(id) };
+  }
+
+  @Delete('logs/sessions/:sessionId')
+  deleteLogSession(@Req() req: Request, @Param('sessionId') sessionId: string): { sessionId: string; deleted: number } {
+    const { username, admin } = this.auth.assertUser(req.headers.authorization);
+    const deleted = this.requestLogs.deleteSession(sessionId.trim(), admin ? undefined : username);
+    if (deleted === 0) {
+      throw new NotFoundException('Session not found');
+    }
+    return { sessionId: sessionId.trim(), deleted };
   }
 
   @Get('stats')
@@ -309,5 +403,36 @@ export class ApiController {
       throw new BadRequestException('Body may include a string "model"');
     }
     return typeof body.model === 'string' ? body.model : undefined;
+  }
+
+  private logQuery(
+    req: Request,
+    params: {
+      app?: string;
+      limit?: string;
+      offset?: string;
+      user?: string;
+      providerModel?: string;
+      status?: string;
+      session?: string;
+      from?: string;
+      to?: string;
+    },
+  ): RequestLogQuery {
+    const { username, admin } = this.auth.assertUser(req.headers.authorization);
+    const statusRaw = params.status?.trim();
+    const statusNum = statusRaw ? Number(statusRaw) : undefined;
+    const filterUser = admin ? params.user?.trim() || undefined : username;
+    return {
+      app: params.app?.trim() || undefined,
+      username: filterUser,
+      providerModel: params.providerModel?.trim() || undefined,
+      status: statusNum !== undefined && Number.isFinite(statusNum) ? statusNum : undefined,
+      sessionId: params.session?.trim() || undefined,
+      from: params.from?.trim() || undefined,
+      to: params.to?.trim() || undefined,
+      limit: parseIntParam(params.limit, 50, 1, MAX_PAGE_SIZE),
+      offset: parseIntParam(params.offset, 0, 0, Number.MAX_SAFE_INTEGER),
+    };
   }
 }

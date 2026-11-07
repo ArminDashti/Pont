@@ -20,6 +20,7 @@ import {
   responsesToOpenAiCompletion,
 } from '../opencode-go/responses-bridge/responses-to-openai.js';
 import { SESSION_HEADER, resolveSessionId } from '../opencode-go/session.util.js';
+import { resolveClientIp } from '../logging/client-ip.js';
 import { extractUsage } from '../logging/usage.js';
 import {
   applyEndUserFromHeader,
@@ -79,6 +80,8 @@ interface CompletionRecord {
   status: number;
   captured: string;
   startedAt: number;
+  sessionId: string;
+  clientIp: string;
 }
 
 /** Proxies OpenAI-style and Anthropic-style requests to any catalog provider, streaming and logging each call. */
@@ -234,6 +237,7 @@ export class ProviderProxyService {
     }
 
     const { sessionId, generated } = resolveSessionId(req.headers[SESSION_HEADER]);
+    const clientIp = resolveClientIp(req);
     const url =
       provider.id === 'opencode-go'
         ? openCodeGoUpstreamUrl(provider.baseUrl, upstreamPath, upstreamModel ?? modelName)
@@ -268,6 +272,8 @@ export class ProviderProxyService {
         status,
         captured,
         startedAt,
+        sessionId,
+        clientIp,
       });
     }
   }
@@ -287,6 +293,8 @@ export class ProviderProxyService {
     try {
       const usage = extractUsage(record.captured);
       const model = readRequestModel(record.body);
+      const requestJson =
+        record.body !== undefined && record.body !== null ? JSON.stringify(record.body) : '';
       const entry = this.requestLogs.insert({
         createdAt: new Date(),
         app: record.clientApp,
@@ -294,11 +302,17 @@ export class ProviderProxyService {
         username: record.username,
         providerModel: `${record.provider.id}/${model ?? 'unknown'}`,
         path: `${record.routePrefix}/${record.pathSuffix}`,
+        sessionId: record.sessionId,
+        clientIp: record.clientIp,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
         totalTokens: usage.totalTokens,
+        inputCacheTokens: usage.inputCacheTokens,
+        outputCacheTokens: usage.outputCacheTokens,
         durationMs: Math.round(performance.now() - record.startedAt),
         status: record.status,
+        requestJson,
+        responseCapture: record.captured,
       });
       this.requestEvents.publish(entry);
     } catch (error) {

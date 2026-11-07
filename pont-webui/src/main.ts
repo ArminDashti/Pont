@@ -9,6 +9,7 @@ interface UserRecord {
   enabled: boolean;
   admin: boolean;
   gatewayApiKeyPrefix: string;
+  timezone: string;
 }
 
 interface ProviderKeyStatus {
@@ -23,10 +24,59 @@ interface LogRecord {
   app: string;
   username: string;
   providerModel: string;
+  sessionId: string;
+  clientIp: string;
+  promptTokens: number;
+  completionTokens: number;
+  inputCacheTokens: number;
+  outputCacheTokens: number;
   totalTokens: number;
   durationMs: number;
   status: number;
   createdAt: string;
+  requestJson?: string;
+  responseCapture?: string;
+}
+
+interface SessionLogSummary {
+  sessionId: string;
+  username: string;
+  providerModels: string[];
+  ips: string[];
+  promptTokens: number;
+  completionTokens: number;
+  inputCacheTokens: number;
+  outputCacheTokens: number;
+  durationMs: number;
+  startedAt: string;
+  statusCodes: number[];
+  promptCount: number;
+}
+
+interface LogFilterOptions {
+  apps: string[];
+  users: string[];
+  providerModels: string[];
+  statuses: number[];
+}
+
+interface ConversationTurn {
+  id: number;
+  createdAt: string;
+  providerModel: string;
+  status: number;
+  durationMs: number;
+  promptTokens: number;
+  completionTokens: number;
+  userText: string;
+  assistantText: string;
+  capturePreview: string | null;
+}
+
+interface SessionConversation {
+  sessionId: string;
+  username: string;
+  turns: ConversationTurn[];
 }
 
 interface UsageBreakdown {
@@ -55,6 +105,8 @@ interface VpnStatus {
 
 const PAGE_SIZE = 50;
 const SIDEBAR_COLLAPSED_KEY = 'pont.sidebarCollapsed';
+const TIMEZONE_STORAGE_KEY = 'pont.webui.timezone';
+let displayTimezone = 'UTC';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 function readSidebarCollapsed(): boolean {
@@ -119,6 +171,8 @@ const NAV_ICON: Record<string, string> = {
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>',
   '/logs':
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
+  '/settings':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
   '/endpoints':
     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
   '/users':
@@ -187,18 +241,202 @@ function compact(value: number): string {
   return compactFormat.format(value ?? 0);
 }
 
-function time(iso: string): string {
-  const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`);
+function readTimezoneFallback(): string {
+  try {
+    return localStorage.getItem(TIMEZONE_STORAGE_KEY) || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+function applyUserTimezone(me: UserRecord): void {
+  displayTimezone = me.timezone?.trim() || readTimezoneFallback();
+  try {
+    localStorage.setItem(TIMEZONE_STORAGE_KEY, displayTimezone);
+  } catch {
+    /* private mode */
+  }
+}
+
+function parseUtcDate(iso: string): Date {
+  const normalized = iso.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  return new Date(normalized);
+}
+
+function splitProviderModel(providerModel: string): { provider: string; model: string } {
+  const slash = providerModel.indexOf('/');
+  if (slash <= 0) {
+    return { provider: providerModel.trim() || '—', model: '—' };
+  }
+  return {
+    provider: providerModel.slice(0, slash).trim() || '—',
+    model: providerModel.slice(slash + 1).trim() || '—',
+  };
+}
+
+function splitProviderModelsList(providerModels: string[]): { providers: string; models: string } {
+  const providers = new Set<string>();
+  const models = new Set<string>();
+  for (const combined of providerModels) {
+    const { provider, model } = splitProviderModel(combined);
+    if (provider !== '—') providers.add(provider);
+    if (model !== '—') models.add(model);
+  }
+  return {
+    providers: [...providers].join(', ') || '—',
+    models: [...models].join(', ') || '—',
+  };
+}
+
+function formatDurationMmSs(durationMs: number): string {
+  const totalSec = Math.max(0, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatDateTime(iso: string, timeZone = displayTimezone): string {
+  const date = parseUtcDate(iso);
   if (Number.isNaN(date.getTime())) {
     return iso;
   }
-  const y = date.getFullYear();
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const h = String(date.getHours()).padStart(2, '0');
-  const mi = String(date.getMinutes()).padStart(2, '0');
-  const s = String(date.getSeconds()).padStart(2, '0');
-  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+  const tz = timeZone?.trim() || 'UTC';
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+      .format(date)
+      .replace(',', '');
+  } catch {
+    return iso;
+  }
+}
+
+function time(iso: string): string {
+  return formatDateTime(iso);
+}
+
+function listTimezones(): string[] {
+  if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
+    return (Intl as unknown as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf('timeZone');
+  }
+  return ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tehran'];
+}
+
+interface TzParts {
+  y: number;
+  m: number;
+  d: number;
+  h: number;
+  min: number;
+  s: number;
+}
+
+function partsInTimeZone(ms: number, timeZone: string): TzParts {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(new Date(ms));
+  const pick = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return { y: pick('year'), m: pick('month'), d: pick('day'), h: pick('hour'), min: pick('minute'), s: pick('second') };
+}
+
+/** Local calendar date (YYYY-MM-DD) at 00:00 in timeZone → UTC ISO instant. */
+function localDateMidnightUtcIso(ymd: string, timeZone: string): string {
+  const [y, m, d] = ymd.split('-').map((part) => Number(part));
+  let ms = Date.UTC(y, m - 1, d, 12, 0, 0);
+  for (let i = 0; i < 96; i += 1) {
+    const p = partsInTimeZone(ms, timeZone);
+    const deltaMs = ((p.h * 3600 + p.min * 60 + p.s) * 1000);
+    ms -= deltaMs;
+    const p2 = partsInTimeZone(ms, timeZone);
+    if (p2.y === y && p2.m === m && p2.d === d && p2.h === 0 && p2.min === 0 && p2.s === 0) {
+      return new Date(ms).toISOString();
+    }
+  }
+  return new Date(Date.UTC(y, m - 1, d)).toISOString();
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map((part) => Number(part));
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+function logsSessionIdFromRoute(): string | undefined {
+  const match = route().match(/^\/logs\/sessions\/([^/]+)$/);
+  return match?.[1];
+}
+
+function logsQueryParams(): URLSearchParams {
+  const query = location.hash.split('?')[1];
+  return new URLSearchParams(query ?? '');
+}
+
+function logsFilterQuery(extra: Record<string, string | number | undefined> = {}): string {
+  const params = logsQueryParams();
+  const keys = ['tab', 'app', 'user', 'providerModel', 'status', 'from', 'to', 'session'];
+  const search = new URLSearchParams();
+  for (const key of keys) {
+    const value = extra[key] ?? params.get(key);
+    if (value !== undefined && value !== null && String(value) !== '') {
+      search.set(key, String(value));
+    }
+  }
+  if (extra.offset !== undefined) {
+    search.set('offset', String(extra.offset));
+  } else if (params.has('offset')) {
+    search.set('offset', params.get('offset')!);
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
+function logsApiQuery(offset: number): string {
+  const params = logsQueryParams();
+  const search = new URLSearchParams();
+  search.set('limit', String(PAGE_SIZE));
+  search.set('offset', String(offset));
+  for (const key of ['app', 'user', 'providerModel', 'status', 'session']) {
+    const value = params.get(key);
+    if (value) {
+      search.set(key === 'user' ? 'user' : key, value);
+    }
+  }
+  const from = params.get('from');
+  const to = params.get('to');
+  if (from) {
+    search.set('from', localDateMidnightUtcIso(from, displayTimezone));
+  }
+  if (to) {
+    search.set('to', localDateMidnightUtcIso(addDaysYmd(to, 1), displayTimezone));
+  }
+  return search.toString();
+}
+
+function statusBadge(status: number): string {
+  return `<span class="badge ${status >= 400 ? 'bad' : 'good'}">${status}</span>`;
+}
+
+function statusBadges(codes: number[]): string {
+  if (!codes.length) {
+    return '<span class="muted">—</span>';
+  }
+  return codes.map((code) => statusBadge(code)).join(' ');
 }
 
 /** Old `#/admin/...` bookmarks land on the new top-level routes. */
@@ -234,6 +472,8 @@ async function render(): Promise<void> {
     navigate('/login');
     return;
   }
+
+  applyUserTimezone(me);
 
   const target = LEGACY_ROUTES[path] ?? path;
   if (target !== path) {
@@ -278,10 +518,12 @@ async function render(): Promise<void> {
     ['/playground', 'Playground'],
     ['/logs', 'Logs'],
     ['/endpoints', 'Endpoints'],
+    ['/settings', 'Settings'],
     ...(me.admin ? ([['/users', 'Users']] as Array<[string, string]>) : []),
   ];
   const nav = shell.querySelector('#nav')!;
-  const navActive = target === '/user-models' ? '/users' : target;
+  const navActive =
+    target === '/user-models' ? '/users' : target.startsWith('/logs') ? '/logs' : target;
   for (const [href, label] of links) {
     nav.append(el(navLinkHtml(href, label, navActive === href)));
   }
@@ -306,8 +548,15 @@ async function render(): Promise<void> {
   try {
     if (target === '/') {
       main.append(await renderOverview(me));
-    } else if (target === '/logs') {
-      main.append(await renderLogs(me));
+    } else if (target.startsWith('/logs')) {
+      const sessionId = logsSessionIdFromRoute();
+      if (sessionId) {
+        main.append(await renderLogSession(me, sessionId));
+      } else {
+        main.append(await renderLogs(me));
+      }
+    } else if (target === '/settings') {
+      main.append(await renderSettings(me));
     } else if (target === '/endpoints') {
       main.append(renderEndpoints());
     } else if (target === '/providers') {
@@ -473,30 +722,238 @@ async function renderOverview(me: UserRecord): Promise<HTMLElement> {
   return wrap;
 }
 
-function logsTable(items: LogRecord[], showUser: boolean): HTMLElement {
+function logsTabLink(tab: 'session' | 'prompt', label: string, active: boolean): string {
+  const params = logsQueryParams();
+  params.set('tab', tab);
+  params.delete('offset');
+  const qs = params.toString();
+  return `<a class="logs-tab${active ? ' active' : ''}" href="#/logs${qs ? `?${qs}` : ''}">${esc(label)}</a>`;
+}
+
+async function showPromptModal(promptId: number): Promise<void> {
+  const row = await apiFetch<LogRecord>(`/logs/prompts/${promptId}`);
+  let userText = row.title;
+  let assistantText = '';
+  if (row.sessionId) {
+    try {
+      const conversation = await apiFetch<SessionConversation>(`/logs/sessions/${encodeURIComponent(row.sessionId)}`);
+      const turn = conversation.turns.find((t) => t.id === promptId);
+      if (turn) {
+        userText = turn.userText;
+        assistantText = turn.assistantText || turn.capturePreview || '';
+      }
+    } catch {
+      /* use title */
+    }
+  }
+  if (!assistantText && row.responseCapture) {
+    assistantText = row.responseCapture.length > 4000 ? `${row.responseCapture.slice(0, 4000)}…` : row.responseCapture;
+  }
+  const backdrop = el(`
+    <div class="modal-backdrop" data-prompt-close tabindex="-1">
+      <div class="modal panel" role="dialog" aria-labelledby="prompt-modal-title">
+        <div class="panel-head">
+          <h2 id="prompt-modal-title">Prompt</h2>
+          <button type="button" class="secondary small" data-prompt-close>Close</button>
+        </div>
+        <p class="muted mono">${esc(row.providerModel)} · ${esc(formatDateTime(row.createdAt))} · ${statusBadge(row.status)}</p>
+        <h3>User</h3>
+        <pre class="log-turn-text">${esc(userText || '—')}</pre>
+        <h3>Assistant</h3>
+        <pre class="log-turn-text">${esc(assistantText || '—')}</pre>
+      </div>
+    </div>
+  `);
+  const close = (): void => backdrop.remove();
+  backdrop.querySelectorAll('[data-prompt-close]').forEach((node) => node.addEventListener('click', close));
+  document.body.append(backdrop);
+}
+
+function attachLogActionHandlers(root: HTMLElement, me: UserRecord, reload: () => void): void {
+  root.querySelectorAll<HTMLButtonElement>('[data-log-prompts]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const session = btn.dataset.logPrompts;
+      if (!session) return;
+      const params = logsQueryParams();
+      params.set('tab', 'prompt');
+      params.set('session', session);
+      params.delete('offset');
+      navigate(`/logs?${params.toString()}`);
+    });
+  });
+  root.querySelectorAll<HTMLButtonElement>('[data-log-prompt]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const id = Number(btn.dataset.logPrompt);
+      if (Number.isFinite(id)) void showPromptModal(id);
+    });
+  });
+  root.querySelectorAll<HTMLButtonElement>('[data-log-delete]').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const kind = btn.dataset.logDelete;
+      const id = btn.dataset.logDeleteId;
+      const session = btn.dataset.logDeleteSession;
+      const label = kind === 'session' ? `session ${session}` : `log #${id}`;
+      if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
+      void (async () => {
+        if (kind === 'session' && session) {
+          await apiFetch(`/logs/sessions/${encodeURIComponent(session)}`, { method: 'DELETE' });
+        } else if (id) {
+          await apiFetch(`/logs/${id}`, { method: 'DELETE' });
+        }
+        reload();
+      })();
+    });
+  });
+  root.querySelectorAll<HTMLTableRowElement>('tr[data-session-row]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const sessionId = row.dataset.sessionRow;
+      if (sessionId) navigate(`/logs/sessions/${encodeURIComponent(sessionId)}`);
+    });
+  });
+}
+
+function renderLogsFilters(options: LogFilterOptions, me: UserRecord): HTMLElement {
+  const params = logsQueryParams();
+  const appOpts = ['<option value="">All apps</option>', ...options.apps.map((a) => `<option value="${esc(a)}"${params.get('app') === a ? ' selected' : ''}>${esc(a)}</option>`)].join('');
+  const userOpts = me.admin
+    ? ['<option value="">All users</option>', ...options.users.map((u) => `<option value="${esc(u)}"${params.get('user') === u ? ' selected' : ''}>${esc(u)}</option>`)].join('')
+    : '';
+  const modelOpts = [
+    '<option value="">All provider/models</option>',
+    ...options.providerModels.map(
+      (m) => `<option value="${esc(m)}"${params.get('providerModel') === m ? ' selected' : ''}>${esc(m)}</option>`,
+    ),
+  ].join('');
+  const statusOpts = [
+    '<option value="">All statuses</option>',
+    ...options.statuses.map(
+      (s) => `<option value="${s}"${params.get('status') === String(s) ? ' selected' : ''}>${s}</option>`,
+    ),
+  ].join('');
+  const filters = el(`
+    <div class="filters-row filters-row--catalog logs-filters">
+      <label>App <select id="log-filter-app">${appOpts}</select></label>
+      ${me.admin ? `<label>User <select id="log-filter-user">${userOpts}</select></label>` : ''}
+      <label>Provider/Model <select id="log-filter-model">${modelOpts}</select></label>
+      <label>Status <select id="log-filter-status">${statusOpts}</select></label>
+      <label>From <input id="log-filter-from" type="date" value="${esc(params.get('from') ?? '')}" /></label>
+      <label>To <input id="log-filter-to" type="date" value="${esc(params.get('to') ?? '')}" /></label>
+      <button type="button" class="secondary small" id="log-filter-apply">Apply</button>
+      <button type="button" class="secondary small" id="log-filter-clear">Clear</button>
+    </div>
+  `);
+  const apply = (): void => {
+    const next = logsQueryParams();
+    const tab = next.get('tab') || 'session';
+    next.set('tab', tab);
+    next.delete('offset');
+    const setOrDelete = (key: string, value: string): void => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    };
+    setOrDelete('app', (filters.querySelector('#log-filter-app') as HTMLSelectElement).value.trim());
+    if (me.admin) {
+      setOrDelete('user', (filters.querySelector('#log-filter-user') as HTMLSelectElement).value.trim());
+    }
+    setOrDelete('providerModel', (filters.querySelector('#log-filter-model') as HTMLSelectElement).value.trim());
+    setOrDelete('status', (filters.querySelector('#log-filter-status') as HTMLSelectElement).value.trim());
+    setOrDelete('from', (filters.querySelector('#log-filter-from') as HTMLInputElement).value.trim());
+    setOrDelete('to', (filters.querySelector('#log-filter-to') as HTMLInputElement).value.trim());
+    navigate(`/logs?${next.toString()}`);
+  };
+  filters.querySelector('#log-filter-apply')!.addEventListener('click', apply);
+  filters.querySelector('#log-filter-clear')!.addEventListener('click', () => {
+    const tab = logsQueryParams().get('tab') || 'session';
+    navigate(`/logs?tab=${tab}`);
+  });
+  return filters;
+}
+
+function renderSessionLogsTable(items: SessionLogSummary[], showUser: boolean): HTMLElement {
+  const colSpan = showUser ? 13 : 12;
   const rows = items.length
     ? items
         .map(
-          (row) => `
-        <tr>
-          <td class="muted nowrap">${esc(time(row.createdAt))}</td>
-          <td><span class="badge">${esc(row.app || 'unknown')}</span></td>
+          (row) => {
+            const { providers, models } = splitProviderModelsList(row.providerModels);
+            return `
+        <tr class="logs-row-clickable" data-session-row="${esc(row.sessionId)}" title="Open conversation">
           ${showUser ? `<td>${esc(row.username)}</td>` : ''}
-          <td class="mono">${esc(row.providerModel)}</td>
-          <td class="title" title="${esc(row.title)}">${esc(row.title) || '<span class="muted">—</span>'}</td>
-          <td class="num">${num(row.totalTokens)}</td>
-          <td class="num">${num(row.durationMs)}</td>
-          <td><span class="badge ${row.status >= 400 ? 'bad' : 'good'}">${row.status}</span></td>
-        </tr>`,
+          <td class="mono">${esc(providers)}</td>
+          <td class="mono">${esc(models)}</td>
+          <td class="mono">${esc(row.ips.filter(Boolean).join(', ') || '—')}</td>
+          <td class="mono truncate" title="${esc(row.sessionId)}">${esc(row.sessionId)}</td>
+          <td class="num">${num(row.promptTokens)}</td>
+          <td class="num">${num(row.completionTokens)}</td>
+          <td class="num">${num(row.inputCacheTokens)}</td>
+          <td class="num">${num(row.outputCacheTokens)}</td>
+          <td class="num mono">${esc(formatDurationMmSs(row.durationMs))}</td>
+          <td class="muted nowrap">${esc(formatDateTime(row.startedAt))}</td>
+          <td>${statusBadges(row.statusCodes)}</td>
+          <td class="logs-actions">
+            <button type="button" class="secondary small" data-log-prompts="${esc(row.sessionId)}">Prompts</button>
+            <button type="button" class="secondary small" data-log-delete="session" data-log-delete-session="${esc(row.sessionId)}">Delete</button>
+          </td>
+        </tr>`;
+          },
         )
         .join('')
-    : `<tr><td colspan="${showUser ? 8 : 7}" class="muted">No requests yet.</td></tr>`;
+    : `<tr><td colspan="${colSpan}" class="muted">No sessions yet.</td></tr>`;
   return el(`
     <table>
       <thead>
         <tr>
-          <th>Time</th><th>App</th>${showUser ? '<th>User</th>' : ''}
-          <th>Model</th><th>Prompt</th><th class="num">Tokens</th><th class="num">ms</th><th>Status</th>
+          ${showUser ? '<th>User</th>' : ''}
+          <th>Provider</th><th>Model</th><th>IPs</th><th>Session</th>
+          <th class="num">Input tokens</th><th class="num">Output tokens</th>
+          <th class="num">Input cache</th><th class="num">Output cache</th>
+          <th class="num">Duration</th><th>Started at</th><th>Status codes</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `);
+}
+
+function renderPromptLogsTable(items: LogRecord[], showUser: boolean): HTMLElement {
+  const colSpan = showUser ? 11 : 10;
+  const rows = items.length
+    ? items
+        .map(
+          (row) => {
+            const { provider, model } = splitProviderModel(row.providerModel);
+            return `
+        <tr>
+          ${showUser ? `<td>${esc(row.username)}</td>` : ''}
+          <td class="mono">${esc(provider)}</td>
+          <td class="mono">${esc(model)}</td>
+          <td class="mono">${esc(row.clientIp || '—')}</td>
+          <td class="title" title="${esc(row.title)}">${esc(row.title) || '<span class="muted">—</span>'}</td>
+          <td class="num">${num(row.promptTokens)}</td>
+          <td class="num">${num(row.completionTokens)}</td>
+          <td class="num mono">${esc(formatDurationMmSs(row.durationMs))}</td>
+          <td class="muted nowrap">${esc(formatDateTime(row.createdAt))}</td>
+          <td>${statusBadge(row.status)}</td>
+          <td class="logs-actions">
+            <button type="button" class="secondary small" data-log-prompt="${row.id}">Prompt</button>
+            <button type="button" class="secondary small" data-log-delete="prompt" data-log-delete-id="${row.id}">Delete</button>
+          </td>
+        </tr>`;
+          },
+        )
+        .join('')
+    : `<tr><td colspan="${colSpan}" class="muted">No prompts yet.</td></tr>`;
+  return el(`
+    <table>
+      <thead>
+        <tr>
+          ${showUser ? '<th>User</th>' : ''}
+          <th>Provider</th><th>Model</th><th>IP</th><th>Prompt</th>
+          <th class="num">Input tokens</th><th class="num">Output tokens</th>
+          <th class="num">Duration</th><th>Created at</th><th>Status code</th><th>Actions</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -505,27 +962,134 @@ function logsTable(items: LogRecord[], showUser: boolean): HTMLElement {
 }
 
 async function renderLogs(me: UserRecord): Promise<HTMLElement> {
-  const offset = Number(queryParam('offset') ?? 0) || 0;
-  const { items, total } = await apiFetch<{ items: LogRecord[]; total: number }>(`/logs?limit=${PAGE_SIZE}&offset=${offset}`);
+  const params = logsQueryParams();
+  const tab = params.get('tab') === 'prompt' ? 'prompt' : 'session';
+  const offset = Number(params.get('offset') ?? 0) || 0;
+  const apiQs = logsApiQuery(offset);
+  const filterOptions = await apiFetch<LogFilterOptions>('/logs/filter-options');
+
+  let total = 0;
+  let table: HTMLElement;
+  if (tab === 'prompt') {
+    const { items, total: promptTotal } = await apiFetch<{ items: LogRecord[]; total: number }>(`/logs/prompts?${apiQs}`);
+    total = promptTotal;
+    table = renderPromptLogsTable(items, me.admin);
+  } else {
+    const { items, total: sessionTotal } = await apiFetch<{ items: SessionLogSummary[]; total: number }>(
+      `/logs/sessions?${apiQs}`,
+    );
+    total = sessionTotal;
+    table = renderSessionLogsTable(items, me.admin);
+  }
+
   const wrap = el(`
     <div class="page">
-      <div class="panel"></div>
+      <div class="logs-tabs">${logsTabLink('session', 'By session', tab === 'session')}${logsTabLink('prompt', 'By prompt', tab === 'prompt')}</div>
+      <div class="panel panel--flush-table" id="logs-panel"></div>
     </div>
   `);
-  const panel = wrap.querySelector('.panel')!;
-  panel.append(logsTable(items, me.admin));
+  const panel = wrap.querySelector('#logs-panel')!;
+  panel.append(renderLogsFilters(filterOptions, me));
+  panel.append(el('<div class="table-scroll"></div>'));
+  panel.querySelector('.table-scroll')!.append(table);
+
+  const reload = (): void => void render();
+  attachLogActionHandlers(panel, me, reload);
 
   const pager = el('<div class="pager"></div>');
   const prev = el(`<button class="secondary small" ${offset === 0 ? 'disabled' : ''}>Previous</button>`);
   const next = el(`<button class="secondary small" ${offset + PAGE_SIZE >= total ? 'disabled' : ''}>Next</button>`);
-  prev.addEventListener('click', () => navigate(`/logs?offset=${Math.max(0, offset - PAGE_SIZE)}`));
-  next.addEventListener('click', () => navigate(`/logs?offset=${offset + PAGE_SIZE}`));
+  const goPage = (nextOffset: number): void => {
+    const nextParams = logsQueryParams();
+    nextParams.set('offset', String(nextOffset));
+    navigate(`/logs?${nextParams.toString()}`);
+  };
+  prev.addEventListener('click', () => goPage(Math.max(0, offset - PAGE_SIZE)));
+  next.addEventListener('click', () => goPage(offset + PAGE_SIZE));
   pager.append(
     prev,
     el(`<span class="muted">${num(offset + 1)}–${num(Math.min(offset + PAGE_SIZE, total))} of ${num(total)}</span>`),
     next,
   );
   panel.append(pager);
+  return wrap;
+}
+
+async function renderLogSession(me: UserRecord, sessionId: string): Promise<HTMLElement> {
+  const conversation = await apiFetch<SessionConversation>(`/logs/sessions/${encodeURIComponent(sessionId)}`);
+  const turnsHtml = conversation.turns.length
+    ? conversation.turns
+        .map(
+          (turn) => `
+        <article class="log-turn panel">
+          <header class="log-turn-head">
+            <span class="mono">${esc(turn.providerModel)}</span>
+            <span class="muted">${esc(formatDateTime(turn.createdAt))}</span>
+            ${statusBadge(turn.status)}
+            <span class="muted">${esc(formatDurationMmSs(turn.durationMs))} · in ${num(turn.promptTokens)} / out ${num(turn.completionTokens)}</span>
+          </header>
+          <h3>User</h3>
+          <pre class="log-turn-text">${esc(turn.userText || '—')}</pre>
+          <h3>Assistant</h3>
+          <pre class="log-turn-text">${esc(turn.assistantText || turn.capturePreview || '—')}</pre>
+        </article>`,
+        )
+        .join('')
+    : '<p class="muted">No turns in this session.</p>';
+
+  const wrap = el(`
+    <div class="page">
+      <header class="page-head">
+        <div>
+          <p><a class="muted" href="#/logs?tab=session">← Back to sessions</a></p>
+          <h1>Session</h1>
+          <p class="mono muted">${esc(conversation.sessionId)}</p>
+          ${me.admin ? `<p class="muted">User ${esc(conversation.username)}</p>` : ''}
+        </div>
+      </header>
+      <div class="log-conversation">${turnsHtml}</div>
+    </div>
+  `);
+  return wrap;
+}
+
+async function renderSettings(me: UserRecord): Promise<HTMLElement> {
+  const zones = listTimezones();
+  const options = zones.map((zone) => `<option value="${esc(zone)}"${zone === displayTimezone ? ' selected' : ''}>${esc(zone)}</option>`).join('');
+  const wrap = el(`
+    <div class="page">
+      <header class="page-head"><div><h1>Settings</h1><p class="muted">Panel preferences for ${esc(userDisplayName(me))}.</p></div></header>
+      <form class="panel" id="settings-form">
+        <label for="timezone">Timezone</label>
+        <select id="timezone" name="timezone">${options}</select>
+        <p class="muted">Log timestamps and dates use this timezone. Values are stored in UTC on the server.</p>
+        <div class="alert" id="settings-error" hidden></div>
+        <div class="alert good" id="settings-ok" hidden>Saved.</div>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  `);
+  wrap.querySelector('#settings-form')!.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const timezone = (wrap.querySelector('#timezone') as HTMLSelectElement).value.trim();
+    const errorEl = wrap.querySelector('#settings-error') as HTMLElement;
+    const okEl = wrap.querySelector('#settings-ok') as HTMLElement;
+    errorEl.hidden = true;
+    okEl.hidden = true;
+    void (async () => {
+      try {
+        const updated = await apiFetch<UserRecord>('/me/preferences', {
+          method: 'PATCH',
+          body: JSON.stringify({ timezone }),
+        });
+        applyUserTimezone(updated);
+        okEl.hidden = false;
+      } catch (error) {
+        errorEl.textContent = errorText(error);
+        errorEl.hidden = false;
+      }
+    })();
+  });
   return wrap;
 }
 
@@ -1497,7 +2061,7 @@ interface EndpointParam {
 interface EndpointDef {
   id: string;
   group: string;
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   base: 'api' | 'gateway';
   auth: EndpointAuth;
@@ -1826,7 +2390,7 @@ const RESPONSES_BODY = `{
   "input": "Say hi in five words."
 }`;
 
-const GATEWAY_OPTIONAL_HEADERS: EndpointParam[] = [
+const GATEWAY_CLIENT_APP_HEADER: EndpointParam[] = [
   {
     name: 'client-app',
     in: 'header',
@@ -1834,6 +2398,21 @@ const GATEWAY_OPTIONAL_HEADERS: EndpointParam[] = [
     type: 'string',
     description: 'Client label stored in request logs (chat, agent, extension, …).',
   },
+];
+
+const GATEWAY_CHAT_OPTIONAL_HEADERS: EndpointParam[] = [
+  ...GATEWAY_CLIENT_APP_HEADER,
+  {
+    name: 'x-opencode-session',
+    in: 'header',
+    required: false,
+    type: 'string',
+    description: 'Stable conversation id for OpenCode Go; Pont generates one if omitted.',
+  },
+];
+
+const GATEWAY_OPTIONAL_HEADERS: EndpointParam[] = [
+  ...GATEWAY_CLIENT_APP_HEADER,
   {
     name: 'username',
     in: 'header',
@@ -1955,7 +2534,7 @@ const ENDPOINTS: EndpointDef[] = [
     base: 'gateway',
     auth: 'gateway',
     summary: 'All providers with a key, as Pont ids.',
-    params: [...GATEWAY_OPTIONAL_HEADERS],
+    params: [...GATEWAY_CLIENT_APP_HEADER],
   },
   {
     id: 'unified-chat',
@@ -1966,7 +2545,7 @@ const ENDPOINTS: EndpointDef[] = [
     auth: 'gateway',
     summary: 'One endpoint; model prefix picks the provider.',
     body: CHAT_BODY,
-    params: [...GATEWAY_OPTIONAL_HEADERS, ...CHAT_BODY_PARAMS],
+    params: [...GATEWAY_CHAT_OPTIONAL_HEADERS, ...CHAT_BODY_PARAMS],
   },
   {
     id: 'unified-responses',
@@ -1981,24 +2560,6 @@ const ENDPOINTS: EndpointDef[] = [
   },
 
   { id: 'health', group: 'Health', method: 'GET', path: '/health', base: 'gateway', auth: 'none', summary: 'Liveness probe.' },
-
-  {
-    id: 'login',
-    group: 'API',
-    method: 'POST',
-    path: '/api/login',
-    base: 'api',
-    auth: 'none',
-    summary: 'Exchange username/password for a session token.',
-    body: `{
-  "username": "<username>",
-  "password": "<password>"
-}`,
-    params: [
-      { name: 'username', in: 'body', required: true, type: 'string', description: 'Account username.' },
-      { name: 'password', in: 'body', required: true, type: 'string', description: 'Account password.' },
-    ],
-  },
 ];
 
 function authSelectOptions(route: EndpointDef): Array<{ value: EndpointAuth; label: string }> {
