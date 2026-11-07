@@ -13,7 +13,7 @@ services:
       PONT_OPENVPN_SKIP: "1"
       PONT_PORT: "9880"
       PONT_WEBUI_ORIGIN: "http://127.0.0.1:9881"
-      PONT_ADMIN_JWT_SECRET: "${PONT_ADMIN_JWT_SECRET:-dev-change-me-pont-jwt-secret}"
+      PONT_ADMIN_JWT_SECRET: "${PONT_ADMIN_JWT_SECRET:?set PONT_ADMIN_JWT_SECRET in your .env}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
       OPENCODE_GO_API_KEY: "${OPENCODE_GO_API_KEY:-}"
     volumes:
