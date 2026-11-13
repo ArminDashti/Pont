@@ -489,7 +489,7 @@ async function render(): Promise<void> {
     <div class="shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}">
       <aside class="sidebar">
         <div class="sidebar-top">
-          <a class="sidebar-brand" href="#/" title="Pont overview">
+          <a class="sidebar-brand" href="#/" title="Pont dashboard">
             <img class="sidebar-brand-mark" src="${import.meta.env.BASE_URL}brand/dark-icon.png" alt="" width="28" height="28" decoding="async" />
             <span class="sidebar-brand-name">Pont</span>
           </a>
@@ -513,8 +513,8 @@ async function render(): Promise<void> {
   `);
 
   const links: Array<[string, string]> = [
-    ['/', 'Overview'],
-    ['/providers', 'Providers'],
+    ['/', 'Dashboard'],
+    ['/providers', 'Models'],
     ['/playground', 'Playground'],
     ['/logs', 'Logs'],
     ['/endpoints', 'Endpoints'],
@@ -695,7 +695,7 @@ async function renderOverview(me: UserRecord): Promise<HTMLElement> {
     el(`
       <header class="page-head">
         <div>
-          <h1>Overview</h1>
+          <h1>Dashboard</h1>
           <p class="muted">${me.admin ? 'Gateway-wide usage for the last 24 hours.' : 'Your usage for the last 24 hours.'}</p>
         </div>
       </header>
@@ -1398,14 +1398,6 @@ async function buildModelsCatalogPanel(
   const wrap = el(`
       <div class="panel panel--flush-table providers-catalog-panel">
         <div class="panel-head providers-catalog-head">
-          <div>
-            <h2>Model catalog</h2>
-            <p class="muted small">${
-              isAdmin
-                ? 'Toggle gateway access in the first column. Sort columns by clicking headers.'
-                : 'Filter by provider, pricing tier, or search.'
-            }</p>
-          </div>
           <p class="catalog-count-badge mono" aria-live="polite">
             <span class="catalog-count-strong">${num(filtered.length)}</span>
             <span class="catalog-count-sep muted">/</span>
@@ -1848,23 +1840,6 @@ async function renderProviderKeySection(): Promise<HTMLElement> {
 async function renderProvidersPage(me: UserRecord): Promise<HTMLElement> {
   const { models } = await apiFetch<{ models: CatalogModelRow[] }>('/models');
   const page = el('<div class="page providers-page"></div>');
-  page.append(
-    el(`
-      <header class="page-head providers-page-head">
-        <div>
-          <h1>Providers</h1>
-          <p class="muted">${
-            me.admin
-              ? 'Connect upstream APIs, browse models, and control which ones the gateway exposes.'
-              : 'Models available on your gateway with pricing and context limits from the catalog.'
-          }</p>
-        </div>
-        <div class="providers-head-meta">
-          <span class="catalog-count-badge mono" title="Total models in catalog">${num(models.length)}<span class="muted"> models</span></span>
-        </div>
-      </header>
-    `),
-  );
   if (me.admin) {
     page.append(await renderProviderKeySection());
   }

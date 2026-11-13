@@ -911,17 +911,6 @@ button.small {
   gap: 1.5rem;
 }
 
-.providers-page-head {
-  align-items: flex-start;
-}
-
-.providers-head-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
 .catalog-count-badge {
   display: inline-flex;
   align-items: baseline;
@@ -1017,14 +1006,10 @@ button.small {
 }
 
 .providers-catalog-head {
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-end;
   padding-top: 0.15rem;
   padding-bottom: 0.35rem;
-}
-
-.providers-catalog-head h2 {
-  font-size: 1rem;
-  color: var(--text);
 }
 
 .filters-row--catalog {
