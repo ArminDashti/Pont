@@ -115,18 +115,6 @@ export class ProviderProxyService {
     return this.configService.getOrThrow<PontConfig>(pontConfigKey).userAgent;
   }
 
-  async proxyModels(req: Request, res: Response, provider: ProviderDefinition): Promise<void> {
-    const authorization = clientAuthorization(req.headers);
-    const username = this.upstreamAuth.authorize(authorization);
-    this.services.assertEnabled(username);
-    const upstreamKey = this.upstreamAuth.resolveUpstreamApiKey(authorization, provider);
-    const modelsUrl =
-      provider.id === 'opencode-go'
-        ? openCodeGoUpstreamUrl(provider.baseUrl, 'models')
-        : `${provider.baseUrl}/models`;
-    await this.forwardModelsGet(modelsUrl, provider, upstreamKey, req, res, username);
-  }
-
   /** Unified `/api/v1/models`: every provider that has a key, merged into one list of Pont ids. */
   async proxyUnifiedModels(req: Request, res: Response): Promise<void> {
     const authorization = clientAuthorization(req.headers);
@@ -166,11 +154,6 @@ export class ProviderProxyService {
       return isJsonObject(item) && typeof item.id === 'string' && this.eligibleModels.isEnabledForUser(username, item.id);
     });
     res.end(JSON.stringify({ object: 'list', data: merged }));
-  }
-
-  /** Provider-specific routes (`/openrouter/v1/...`, `/zen/go/v1/...`). */
-  async proxyCompletion(req: Request, res: Response, provider: ProviderDefinition, pathSuffix: string): Promise<void> {
-    await this.handleCompletion(req, res, pathSuffix, `/${provider.gatewayPrefix}`, () => provider);
   }
 
   /** Unified `/api/v1/...`: the model prefix picks the provider. */
@@ -278,17 +261,6 @@ export class ProviderProxyService {
     }
   }
 
-  async pingUpstreamModels(provider: ProviderDefinition, upstreamKey: string): Promise<boolean> {
-    const headers = upstreamAuthHeaders(provider, upstreamKey);
-    headers.set('User-Agent', this.userAgent());
-    const modelsUrl =
-      provider.id === 'opencode-go'
-        ? openCodeGoUpstreamUrl(provider.baseUrl, 'models')
-        : `${provider.baseUrl}/models`;
-    const response = await fetch(modelsUrl, { method: 'GET', headers });
-    return response.ok;
-  }
-
   private recordCompletion(record: CompletionRecord): void {
     try {
       const usage = extractUsage(record.captured);
@@ -391,34 +363,6 @@ export class ProviderProxyService {
       this.logger.error(`Upstream request failed: ${url}`, error instanceof Error ? error.stack : error);
       throw new BadGatewayException(`${provider.label} is unreachable`);
     }
-  }
-
-  private async forwardModelsGet(
-    url: string,
-    provider: ProviderDefinition,
-    upstreamKey: string,
-    req: Request,
-    res: Response,
-    username: string,
-  ): Promise<void> {
-    const { sessionId, generated } = resolveSessionId(req.headers[SESSION_HEADER]);
-    const headers = this.buildUpstreamHeaders(provider, upstreamKey, sessionId, req);
-    const upstream = await fetch(url, { method: 'GET', headers });
-    if (!upstream.ok) {
-      await this.pipeUpstreamResponse(upstream, res, generated ? sessionId : undefined);
-      return;
-    }
-    const text = await upstream.text();
-    const transformed = this.eligibleModels.filterModelsListJson(
-      transformModelsListJson(text, provider.id, this.providerKeys.freeModelSlugs()),
-      username,
-    );
-    res.status(upstream.status);
-    res.setHeader('Content-Type', 'application/json');
-    if (generated) {
-      res.setHeader(SESSION_HEADER, sessionId);
-    }
-    res.end(transformed);
   }
 
   /**

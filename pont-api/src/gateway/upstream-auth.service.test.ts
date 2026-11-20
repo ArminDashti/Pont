@@ -9,12 +9,10 @@ const OPENCODE_GO: ProviderDefinition = {
   id: 'opencode-go',
   label: 'OpenCode Go',
   baseUrl: 'https://opencode.ai/inference/go',
-  gatewayPrefix: 'zen/go/v1',
   envVar: 'OPENCODE_GO_API_KEY',
   auth: { bearer: true, xApiKey: true },
   defaultHeaders: {},
   bridgesClaudeToChat: true,
-  endpoints: [],
 };
 
 describe('UpstreamAuthService', () => {

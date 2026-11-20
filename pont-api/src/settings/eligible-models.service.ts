@@ -13,10 +13,6 @@ export interface EligibleModelRow {
   enabled: boolean;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** Gateway allowlist for Pont model ids; unset means OpenCode Go only. */
 @Injectable()
 export class EligibleModelsService {
@@ -137,23 +133,5 @@ export class EligibleModelsService {
       }
     }
     return this.userModels.setModelIds(username, unique);
-  }
-
-  filterModelsListJson(bodyText: string, username?: string): string {
-    try {
-      const parsed = JSON.parse(bodyText) as unknown;
-      if (!isRecord(parsed) || !Array.isArray(parsed.data)) {
-        return bodyText;
-      }
-      const data = parsed.data.filter((item) => {
-        if (!isRecord(item) || typeof item.id !== 'string') {
-          return true;
-        }
-        return username ? this.isEnabledForUser(username, item.id) : this.isEnabled(item.id);
-      });
-      return JSON.stringify({ ...parsed, data });
-    } catch {
-      return bodyText;
-    }
   }
 }
