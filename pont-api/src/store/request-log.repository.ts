@@ -274,6 +274,34 @@ export class RequestLogRepository {
     };
   }
 
+  countAll(): number {
+    const row = this.database.db.prepare('SELECT COUNT(*) AS n FROM request_logs').get() as { n: number };
+    return row.n;
+  }
+
+  usageByUsername(): Array<{
+    username: string;
+    calls: number;
+    promptTokens: number;
+    completionTokens: number;
+  }> {
+    return this.database.db
+      .prepare(
+        `SELECT username,
+                COUNT(*) AS calls,
+                COALESCE(SUM(prompt_tokens), 0) AS promptTokens,
+                COALESCE(SUM(completion_tokens), 0) AS completionTokens
+         FROM request_logs
+         GROUP BY username`,
+      )
+      .all() as Array<{
+      username: string;
+      calls: number;
+      promptTokens: number;
+      completionTokens: number;
+    }>;
+  }
+
   list(query: RequestLogQuery): { items: RequestLogRecord[]; total: number } {
     return this.listPrompts(query);
   }

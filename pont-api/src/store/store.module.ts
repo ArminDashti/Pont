@@ -36,6 +36,7 @@ import { UserModelsRepository } from './user-models.repository.js';
     ServicesService,
     EligibleModelsService,
     UsersService,
+    UserModelsRepository,
     ProviderCatalogModule,
   ],
 })

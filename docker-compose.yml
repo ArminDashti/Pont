@@ -14,7 +14,9 @@ services:
       PONT_PORT: "9880"
       PONT_WEBUI_ORIGIN: "http://127.0.0.1:9881"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENCODE_GO_API_KEY: "${OPENCODE_GO_API_KEY:-}"
+      OPENCODE_ZEN_API_KEY: "${OPENCODE_ZEN_API_KEY:-}"
     volumes:
       - pont-data:/data
       - ./openvpn:/etc/openvpn/pont:ro

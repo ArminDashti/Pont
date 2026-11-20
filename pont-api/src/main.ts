@@ -11,6 +11,7 @@ import { type PontConfig, pontConfigKey } from './config/pont.config.js';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  app.use('/api/admin', express.json({ limit: '1mb' }));
   const config = app.get(ConfigService).getOrThrow<PontConfig>(pontConfigKey);
   if (config.webuiDist) {
     if (existsSync(config.webuiDist)) {

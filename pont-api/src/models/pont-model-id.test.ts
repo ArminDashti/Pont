@@ -46,5 +46,8 @@ describe('pont-model-id', () => {
   it('encodes pont ids', () => {
     expect(encodePontModelId('opencode-go', 'glm-5', { freeTier: true })).toBe('opencode-glm-5-free');
     expect(encodePontModelId('openrouter', 'gpt-4o')).toBe('openrouter-gpt-4o');
+    expect(encodePontModelId('openai', 'gpt-4o-mini')).toBe('openai-gpt-4o-mini');
+    expect(parsePontModelId('opencodezen-claude-sonnet')?.providerId).toBe('opencode-zen');
+    expect(resolveUpstreamModelId('openai-gpt-4o-mini')).toBe('gpt-4o-mini');
   });
 });

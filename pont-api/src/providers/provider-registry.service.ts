@@ -10,9 +10,12 @@ export class ProviderRegistry {
   private readonly definitions: ReadonlyMap<ProviderId, ProviderDefinition>;
 
   constructor(configService: ConfigService) {
-    const { upstreamBaseUrl } = configService.getOrThrow<PontConfig>(pontConfigKey);
+    const { upstreamBaseUrl, opencodeZenBaseUrl } = configService.getOrThrow<PontConfig>(pontConfigKey);
     this.definitions = new Map(
-      buildProviderDefinitions({ opencodeGo: upstreamBaseUrl }).map((definition) => [definition.id, definition]),
+      buildProviderDefinitions({ opencodeGo: upstreamBaseUrl, opencodeZen: opencodeZenBaseUrl }).map((definition) => [
+        definition.id,
+        definition,
+      ]),
     );
   }
 

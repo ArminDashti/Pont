@@ -31,6 +31,7 @@ function mockConfigService(): ConfigService {
       }
       return {
         upstreamBaseUrl: OPENCODE_GO_BASE_URL,
+        opencodeZenBaseUrl: 'https://opencode.ai/zen/v1',
         platformApiKey: 'platform-key',
         dbPath: ':memory:',
         userAgent: 'pont/0.1.0',
