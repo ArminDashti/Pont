@@ -16,7 +16,7 @@ pnpm --filter @pont/webui run dev
 
 - API: http://127.0.0.1:9880
 - WebUI: http://127.0.0.1:9881
-- Default admin (empty DB): username/password `admin` / `admin`, email `admin@local.local`, first/last name `admin` — gateway key printed once in API logs on first boot
+- Default admin (empty DB): username/password `admin` / `admin`. The gateway key is printed once in API logs on first boot. There is no login API; paste that key into clients and the WebUI.
 
 ## Environment
 
@@ -25,7 +25,6 @@ pnpm --filter @pont/webui run dev
 | `PONT_PORT` | API port (default `9880`) |
 | `PONT_DB_PATH` | SQLite path (default `data/pont.db`) |
 | `PONT_USER_AGENT` | Upstream User-Agent (default `pont/0.1.0`) |
-| `PONT_ADMIN_JWT_SECRET` | JWT secret for WebUI login |
 | `PONT_WEBUI_ORIGIN` | CORS origin for WebUI (default `http://127.0.0.1:9881`) |
 | `OPENROUTER_API_KEY` | Fallback OpenRouter key |
 | `OPENCODE_GO_API_KEY` | Fallback OpenCode Go key |
@@ -35,7 +34,7 @@ pnpm --filter @pont/webui run dev
 
 ## Client usage
 
-Sign in to the WebUI with username and password, then reveal or rotate your **gateway key** (`pont_sk_…`) under **Users**. LLM clients must use that key—not the login session JWT, not OpenRouter/OpenCode upstream keys.
+LLM clients send the per-user gateway key (`pont_sk_…`) printed at first boot. Session login tokens are not accepted.
 
 ```http
 Authorization: Bearer <your pont gateway key>
@@ -44,10 +43,14 @@ x-opencode-session: <optional-session-id>
 
 Gateway paths:
 
-- `http://localhost:9880/api/v1/...` — one endpoint for every provider; the model prefix picks it:
-  `openrouter-…` → OpenRouter, `opencode-…` → OpenCode Go.
-- `http://localhost:9880/openrouter/v1/...` — OpenRouter pinned (no prefix needed).
-- `http://localhost:9880/zen/go/v1/...` — OpenCode Go pinned, old path kept for existing clients.
+- `http://localhost:9880/api/v1/models`
+- `http://localhost:9880/api/v1/chat/completions`
+- `http://localhost:9880/api/v1/responses`
+- `http://localhost:9880/api/v1/messages`
+
+The model id prefix picks the provider: `openrouter-…` → OpenRouter, `opencode-…` → OpenCode Go.
+
+- `GET http://localhost:9880/health` — liveness.
 
 ## Docker (local)
 
@@ -58,7 +61,6 @@ docker compose up -d --build
 - API: http://127.0.0.1:9880 (image `pont-api:local`, SQLite in volume `pont_pont-data`)
 - WebUI: http://127.0.0.1:9881 (image `pont-webui:local`, static nginx build; `/api` is proxied to `api`)
 
-Pass provider keys through the environment (`OPENROUTER_API_KEY`, `OPENCODE_GO_API_KEY`) or set them in the
-WebUI → Providers page (stored in the DB volume). `docker compose down` keeps the volume; never use `-v`.
+Pass provider keys through the environment (`OPENROUTER_API_KEY`, `OPENCODE_GO_API_KEY`). `docker compose down` keeps the volume; never use `-v`.
 
 VPN configs: see [openvpn/README.md](openvpn/README.md).

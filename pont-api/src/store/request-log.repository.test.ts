@@ -14,7 +14,7 @@ function sampleInput(overrides: Partial<Parameters<RequestLogRepository['insert'
     title: 'Hi',
     username: 'armin',
     providerModel: 'opencode-go/glm-5',
-    path: '/zen/go/v1/chat/completions',
+    path: '/api/v1/chat/completions',
     sessionId: 'sess-1',
     clientIp: '127.0.0.1',
     promptTokens: 1,

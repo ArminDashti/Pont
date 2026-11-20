@@ -35,7 +35,6 @@ function mockConfigService(): ConfigService {
         dbPath: ':memory:',
         userAgent: 'pont/0.1.0',
         port: 9880,
-        jwtSecret: 'test',
         webuiOrigin: 'http://127.0.0.1:9881',
       };
     },
@@ -128,14 +127,14 @@ describe('ProviderProxyService', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const { proxy, insert, requestEvents, registry } = createProxy();
+    const { proxy, insert, requestEvents } = createProxy();
     const req = mockRequest(
       JSON.stringify({ model: 'opencode-longcat-2.5-preview-free', messages: [{ role: 'user', content: 'Hello there' }] }),
       'task-abc',
     );
     req.headers.authorization = 'Bearer pont_sk_test';
     const res = mockResponse();
-    await proxy.proxyCompletion(req, res, registry.get('opencode-go'), 'chat/completions');
+    await proxy.proxyRoutedCompletion(req, res, 'chat/completions');
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(insert).toHaveBeenCalledOnce();
@@ -144,7 +143,7 @@ describe('ProviderProxyService', () => {
       title: 'Hello there',
       username: 'armin',
       providerModel: 'opencode-go/longcat-2.5-preview',
-      path: '/zen/go/v1/chat/completions',
+      path: '/api/v1/chat/completions',
       totalTokens: 5,
       status: 200,
     });

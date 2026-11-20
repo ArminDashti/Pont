@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
-import { ApiModule } from './api/api.module.js';
 import pontConfig from './config/pont.config.js';
 import { GatewayModule } from './gateway/gateway.module.js';
 import { HealthController } from './health/health.controller.js';
@@ -19,7 +18,6 @@ import { WebuiModule } from './webui/webui.module.js';
     StoreModule,
     ProviderCatalogModule,
     GatewayModule,
-    ApiModule,
     WebuiModule,
   ],
   controllers: [HealthController],
