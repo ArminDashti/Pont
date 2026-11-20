@@ -132,6 +132,18 @@ export class UsersRepository {
     return user;
   }
 
+  rename(from: string, to: string, firstName: string, lastName: string): void {
+    const db = this.database.db;
+    db.prepare('UPDATE users SET username = ?, first_name = ?, last_name = ? WHERE username = ?').run(
+      to,
+      firstName,
+      lastName,
+      from,
+    );
+    db.prepare('UPDATE user_model_grants SET username = ? WHERE username = ?').run(to, from);
+    db.prepare('UPDATE request_logs SET username = ? WHERE username = ?').run(to, from);
+  }
+
   setTimezone(username: string, timezone: string): UserRecord {
     this.database.db.prepare('UPDATE users SET timezone = ? WHERE username = ?').run(timezone, username);
     const user = this.findByUsername(username);

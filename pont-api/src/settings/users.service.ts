@@ -105,6 +105,43 @@ export class UsersService {
     return user;
   }
 
+  updateProfile(username: string, body: { username?: string; fullName?: string }): UserRecord {
+    const existing = this.users.findByUsername(username);
+    if (!existing) {
+      throw new NotFoundException(`Unknown user "${username}"`);
+    }
+    const nextUsername =
+      body.username === undefined ? existing.username : this.parseUsername(body.username);
+    if (nextUsername !== existing.username && this.users.findByUsername(nextUsername)) {
+      throw new ConflictException(`User "${nextUsername}" already exists`);
+    }
+    let firstName = existing.firstName;
+    let lastName = existing.lastName;
+    if (body.fullName !== undefined) {
+      if (typeof body.fullName !== 'string' || body.fullName.length > MAX_TEXT_LENGTH) {
+        throw new BadRequestException(`"fullName" must be a string up to ${MAX_TEXT_LENGTH} characters`);
+      }
+      const trimmed = body.fullName.trim();
+      const space = trimmed.indexOf(' ');
+      firstName = space === -1 ? trimmed : trimmed.slice(0, space);
+      lastName = space === -1 ? '' : trimmed.slice(space + 1).trim();
+    }
+    if (nextUsername === existing.username) {
+      return this.users.update({ ...existing, firstName, lastName });
+    }
+    const secret = this.settings.get(this.gatewayKeyStorageKey(existing.username));
+    this.users.rename(existing.username, nextUsername, firstName, lastName);
+    if (secret) {
+      this.settings.delete(this.gatewayKeyStorageKey(existing.username));
+      this.storeGatewayKeySecret(nextUsername, secret);
+    }
+    const renamed = this.users.findByUsername(nextUsername);
+    if (!renamed) {
+      throw new NotFoundException(`Unknown user "${nextUsername}"`);
+    }
+    return renamed;
+  }
+
   setEnabled(username: string, enabled: boolean): UserRecord {
     const user = this.users.findByUsername(username);
     if (!user) {

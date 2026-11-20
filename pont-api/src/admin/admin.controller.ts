@@ -243,15 +243,32 @@ export class AdminController {
   @Patch('users/:username')
   setEnabled(
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
     @Param('username') username: string,
-    @Body() body: { enabled?: boolean },
-  ): { username: string; enabled: boolean } {
-    this.requireAdmin(req);
+    @Body() body: { enabled?: boolean; username?: string; fullName?: string },
+  ): { username: string; enabled: boolean; fullName: string } {
+    const actor = this.requireAdmin(req);
+    if (body?.username !== undefined || body?.fullName !== undefined) {
+      const user = this.users.updateProfile(username, { username: body.username, fullName: body.fullName });
+      if (actor === username && user.username !== username) {
+        const token = this.sessions.create(user.username);
+        res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', path: '/' });
+      }
+      return {
+        username: user.username,
+        enabled: user.enabled,
+        fullName: `${user.firstName} ${user.lastName}`.trim(),
+      };
+    }
     if (typeof body?.enabled !== 'boolean') {
       throw new BadRequestException('"enabled" must be a boolean');
     }
     const user = this.users.setEnabled(username, body.enabled);
-    return { username: user.username, enabled: user.enabled };
+    return {
+      username: user.username,
+      enabled: user.enabled,
+      fullName: `${user.firstName} ${user.lastName}`.trim(),
+    };
   }
 
   @Delete('users/:username')
@@ -273,6 +290,12 @@ export class AdminController {
     this.requireAdmin(req);
     await this.users.resetPassword(username, body?.password ?? '');
     return { ok: true };
+  }
+
+  @Get('users/:username/api-key')
+  revealKey(@Req() req: Request, @Param('username') username: string): { gatewayApiKey: string } {
+    this.requireAdmin(req);
+    return { gatewayApiKey: this.users.getGatewayKey(username) };
   }
 
   @Post('users/:username/api-key')

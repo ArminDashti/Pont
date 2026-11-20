@@ -436,7 +436,8 @@ async function renderUsers(): Promise<HTMLElement> {
               <td class="mono">${esc(`${((user.promptTokens + user.completionTokens) / 1000).toFixed(1)}k`)}</td>
               <td class="logs-actions">
                 <button type="button" class="secondary small" data-act="toggle" data-user="${esc(user.username)}" data-enabled="${user.enabled ? '1' : '0'}">${user.enabled ? 'Disable' : 'Enable'}</button>
-                <a class="secondary small" href="#/logs?username=${encodeURIComponent(user.username)}">Logs</a>
+                <button type="button" class="secondary small" data-act="logs" data-user="${esc(user.username)}">Logs</button>
+                <button type="button" class="secondary small" data-act="edit" data-user="${esc(user.username)}" data-name="${esc(user.fullName)}">Edit</button>
                 <button type="button" class="secondary small" data-act="key" data-user="${esc(user.username)}">API key</button>
                 <button type="button" class="secondary small" data-act="models" data-user="${esc(user.username)}">Models</button>
                 <button type="button" class="secondary small" data-act="password" data-user="${esc(user.username)}">Reset password</button>
@@ -483,11 +484,56 @@ async function renderUsers(): Promise<HTMLElement> {
         extra.textContent = response.ok ? 'Password updated.' : 'Password rejected.';
         return;
       }
-      if (act === 'key') {
-        const response = await adminFetch(`/users/${encodeURIComponent(username)}/api-key`, { method: 'POST' });
-        const body = (await response.json()) as { gatewayApiKey?: string };
+      if (act === 'logs') {
+        location.hash = `#/logs?username=${encodeURIComponent(username)}`;
+        return;
+      }
+      if (act === 'edit') {
         extra.hidden = false;
-        extra.textContent = body.gatewayApiKey ? `New key for ${username}: ${body.gatewayApiKey}` : 'Key rotation failed.';
+        extra.innerHTML = `
+          <h2>Edit ${esc(username)}</h2>
+          <label for="edit-username">Username</label>
+          <input id="edit-username" value="${esc(username)}" />
+          <label for="edit-full-name">Full name</label>
+          <input id="edit-full-name" value="${esc(button.dataset.name ?? '')}" />
+          <div><button type="button" id="save-profile">Save</button></div>
+          <p class="muted" id="edit-note"></p>
+        `;
+        extra.querySelector('#save-profile')?.addEventListener('click', () => {
+          const nextUsername = (extra.querySelector('#edit-username') as HTMLInputElement).value;
+          const fullName = (extra.querySelector('#edit-full-name') as HTMLInputElement).value;
+          void (async () => {
+            const response = await adminFetch(`/users/${encodeURIComponent(username)}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ username: nextUsername, fullName }),
+            });
+            const note = extra.querySelector('#edit-note')!;
+            if (!response.ok) {
+              note.textContent = 'Save failed.';
+              return;
+            }
+            await render();
+          })();
+        });
+        return;
+      }
+      if (act === 'key') {
+        const show = async (gatewayApiKey: string | undefined, failed: string) => {
+          extra.hidden = false;
+          extra.innerHTML = gatewayApiKey
+            ? `<h2>API key for ${esc(username)}</h2><p class="mono">${esc(gatewayApiKey)}</p><button type="button" id="rotate-key">Rotate</button>`
+            : `<p>${esc(failed)}</p><button type="button" id="rotate-key">Rotate</button>`;
+          extra.querySelector('#rotate-key')?.addEventListener('click', () => {
+            void (async () => {
+              const response = await adminFetch(`/users/${encodeURIComponent(username)}/api-key`, { method: 'POST' });
+              const body = (await response.json()) as { gatewayApiKey?: string };
+              await show(body.gatewayApiKey, 'Key rotation failed.');
+            })();
+          });
+        };
+        const response = await adminFetch(`/users/${encodeURIComponent(username)}/api-key`);
+        const body = (await response.json()) as { gatewayApiKey?: string; message?: string };
+        await show(response.ok ? body.gatewayApiKey : undefined, body.message ?? 'No stored key. Rotate to issue one.');
         return;
       }
       if (act === 'models') {

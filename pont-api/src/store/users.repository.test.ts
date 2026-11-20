@@ -32,4 +32,35 @@ describe('UsersRepository', () => {
     );
     expect(repository.list()[0]).toMatchObject({ username: 'armin', admin: true });
   });
+
+  it('renames a user and keeps grants and logs on the new username', () => {
+    repository.insert(
+      {
+        username: 'old',
+        email: '',
+        firstName: 'Old',
+        lastName: 'Name',
+        enabled: true,
+        admin: false,
+        gatewayApiKeyPrefix: '',
+        timezone: 'UTC',
+      },
+      'hash',
+      'key-hash',
+      '',
+    );
+    const db = (repository as unknown as { database: GatewayDatabase }).database.db;
+    db.prepare('INSERT INTO user_model_grants (username, model_id) VALUES (?, ?)').run('old', 'gpt');
+    db.prepare(
+      `INSERT INTO request_logs (created_at, app, title, username, provider_model, path, prompt_tokens, completion_tokens, total_tokens, duration_ms, status)
+       VALUES ('t', 'a', 't', 'old', 'm', '/x', 0, 0, 0, 0, 200)`,
+    ).run();
+    repository.rename('old', 'new', 'New', 'Person');
+    expect(repository.findByUsername('old')).toBeUndefined();
+    expect(repository.findByUsername('new')).toMatchObject({ firstName: 'New', lastName: 'Person' });
+    expect(
+      (db.prepare('SELECT username FROM user_model_grants').get() as { username: string }).username,
+    ).toBe('new');
+    expect((db.prepare('SELECT username FROM request_logs').get() as { username: string }).username).toBe('new');
+  });
 });
