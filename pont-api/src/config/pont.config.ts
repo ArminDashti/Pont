@@ -4,8 +4,11 @@ import { resolve } from 'node:path';
 
 export const pontConfigKey = 'pont';
 
+export const DEFAULT_OPENCODE_ZEN_BASE = 'https://opencode.ai/zen/v1';
+
 export interface PontConfig {
   upstreamBaseUrl: string;
+  opencodeZenBaseUrl: string;
   platformApiKey: string | undefined;
   dbPath: string;
   userAgent: string;
@@ -20,6 +23,7 @@ export default registerAs(
     upstreamBaseUrl: normalizeOpenCodeGoBase(
       process.env.OPENCODE_GO_BASE_URL ?? DEFAULT_OPENCODE_GO_INFERENCE_BASE,
     ),
+    opencodeZenBaseUrl: (process.env.OPENCODE_ZEN_BASE_URL ?? DEFAULT_OPENCODE_ZEN_BASE).replace(/\/$/, ''),
     platformApiKey: process.env.OPENCODE_GO_API_KEY?.trim() || undefined,
     dbPath: process.env.PONT_DB_PATH?.trim() || 'data/pont.db',
     userAgent: process.env.PONT_USER_AGENT?.trim() || 'pont/0.1.0',

@@ -10,10 +10,10 @@ const KEY_STORAGE = 'pont_gateway_key';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 type Method = 'GET' | 'POST';
+type Page = '/overview' | '/endpoints' | '/providers' | '/users' | '/logs';
 
 interface RouteDef {
   id: string;
-  group: string;
   method: Method;
   path: string;
   summary: string;
@@ -25,17 +25,11 @@ const CHAT_BODY = `{
   "messages": [{ "role": "user", "content": "Say hi in five words." }]
 }`;
 
-const RESPONSES_BODY = `{
-  "model": "opencode-<model-slug>",
-  "input": "Say hi in five words."
-}`;
-
 const ROUTES: RouteDef[] = [
-  { id: 'health', group: 'Health', method: 'GET', path: '/health', summary: 'Liveness probe.' },
-  { id: 'models', group: 'Gateway', method: 'GET', path: '/api/v1/models', summary: 'Models from every provider that has a key.' },
+  { id: 'health', method: 'GET', path: '/health', summary: 'Liveness probe.' },
+  { id: 'models', method: 'GET', path: '/api/v1/models', summary: 'Models from every provider that has a key.' },
   {
     id: 'chat',
-    group: 'Gateway',
     method: 'POST',
     path: '/api/v1/chat/completions',
     summary: 'Chat. The model prefix picks the provider.',
@@ -43,20 +37,29 @@ const ROUTES: RouteDef[] = [
   },
   {
     id: 'responses',
-    group: 'Gateway',
     method: 'POST',
     path: '/api/v1/responses',
     summary: 'OpenAI Responses API. The model prefix picks the provider.',
-    body: RESPONSES_BODY,
+    body: `{
+  "model": "opencode-<model-slug>",
+  "input": "Say hi in five words."
+}`,
   },
   {
     id: 'messages',
-    group: 'Gateway',
     method: 'POST',
     path: '/api/v1/messages',
     summary: 'Anthropic Messages API. The model prefix picks the provider.',
     body: CHAT_BODY,
   },
+];
+
+const NAV: Array<{ path: Page; label: string }> = [
+  { path: '/overview', label: 'Overview' },
+  { path: '/endpoints', label: 'Endpoints' },
+  { path: '/providers', label: 'Providers' },
+  { path: '/users', label: 'Users' },
+  { path: '/logs', label: 'Logs' },
 ];
 
 function el(html: string): HTMLElement {
@@ -69,9 +72,15 @@ function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-function route(): string {
-  const hash = location.hash.replace(/^#/, '') || '/playground';
-  return hash.split('?')[0] || '/playground';
+function route(): Page {
+  const hash = location.hash.replace(/^#/, '') || '/overview';
+  const path = hash.split('?')[0];
+  return NAV.some((item) => item.path === path) ? (path as Page) : '/overview';
+}
+
+function queryParam(name: string): string {
+  const query = location.hash.split('?')[1] ?? '';
+  return new URLSearchParams(query).get(name) ?? '';
 }
 
 function storedKey(): string {
@@ -100,21 +109,54 @@ function bindKey(root: ParentNode, id: string): HTMLInputElement {
   return input;
 }
 
+async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(`/api/admin${path}`, { ...init, headers, credentials: 'include' });
+}
+
+function tokens(count: number, cache: number): string {
+  const main = `${(count / 1000).toFixed(1)}k`;
+  return `${main} (${(cache / 1000).toFixed(1)}k)`;
+}
+
+function priceCell(perToken: string | null, cache: string | null): string {
+  if (!perToken) {
+    return '—';
+  }
+  const main = Number(perToken) * 1000;
+  const cachePart = cache ? Number(cache) * 1000 : 0;
+  return `$${main.toFixed(4)} ($${cachePart.toFixed(4)})`;
+}
+
+function stamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
+}
+
 async function render(): Promise<void> {
-  const path = route() === '/endpoints' ? '/endpoints' : '/playground';
+  const path = route();
   app.innerHTML = '';
   const shell = el(`
     <div class="shell">
       <aside class="sidebar">
         <div class="sidebar-top">
-          <a class="sidebar-brand" href="#/playground" title="Pont">
+          <a class="sidebar-brand" href="#/overview" title="Pont">
             <img class="sidebar-brand-mark" src="${import.meta.env.BASE_URL}brand/dark-icon.png" alt="" width="28" height="28" decoding="async" />
             <span class="sidebar-brand-name">Pont</span>
           </a>
         </div>
         <nav class="nav" aria-label="Main">
-          <a class="nav-link${path === '/playground' ? ' active' : ''}" href="#/playground"><span class="nav-link-label">Playground</span></a>
-          <a class="nav-link${path === '/endpoints' ? ' active' : ''}" href="#/endpoints"><span class="nav-link-label">Endpoints</span></a>
+          ${NAV.map(
+            (item) =>
+              `<a class="nav-link${path === item.path ? ' active' : ''}" href="#${item.path}"><span class="nav-link-label">${item.label}</span></a>`,
+          ).join('')}
         </nav>
       </aside>
       <main class="main" id="main"></main>
@@ -122,157 +164,108 @@ async function render(): Promise<void> {
   `);
   app.append(shell);
   const main = shell.querySelector('#main')!;
-  main.append(path === '/endpoints' ? renderEndpoints() : renderPlayground());
+  if (path === '/endpoints') {
+    main.append(renderEndpoints());
+    return;
+  }
+  const probe = await adminFetch('/overview');
+  if (probe.status === 401 || probe.status === 403) {
+    main.append(renderLogin());
+    return;
+  }
+  if (path === '/overview') {
+    main.append(renderOverview(await probe.json()));
+  } else if (path === '/providers') {
+    main.append(await renderProviders());
+  } else if (path === '/users') {
+    main.append(await renderUsers());
+  } else {
+    main.append(await renderLogs(queryParam('username')));
+  }
 }
 
-function renderPlayground(): HTMLElement {
+function renderLogin(): HTMLElement {
   const wrap = el(`
     <div class="page">
-      <header class="page-head">
-        <div>
-          <h1>Playground</h1>
-          <p class="muted">Send a prompt to <span class="mono">/api/v1/chat/completions</span>. Paste the gateway key from the API log.</p>
-        </div>
-      </header>
-      <div class="grid-2">
-        <div class="panel">
-          <h2>Request</h2>
-          ${keyField('pg-key')}
-          <label for="pg-model">Model</label>
-          <input id="pg-model" class="mono" placeholder="opencode-…" />
-          <button type="button" id="pg-load" class="secondary">Load models</button>
-          <label for="pg-prompt">Prompt</label>
-          <textarea id="pg-prompt" spellcheck="false" rows="4">Say hi in five words.</textarea>
-          <button type="button" id="pg-run">Run</button>
-        </div>
-        <div class="panel" id="pg-result">
-          <h2>Result</h2>
-          <p class="muted" id="pg-placeholder">Run a test to see the response here.</p>
-        </div>
-      </div>
+      <form class="panel login-card" id="login-form">
+        <h1>Sign in</h1>
+        <label for="login-user">Username</label>
+        <input id="login-user" autocomplete="username" value="admin" />
+        <label for="login-pass">Password</label>
+        <input id="login-pass" type="password" autocomplete="current-password" value="admin" />
+        <button type="submit">Sign in</button>
+        <p class="alert" id="login-error" hidden></p>
+      </form>
     </div>
   `);
-  const key = bindKey(wrap, 'pg-key');
-  const model = wrap.querySelector('#pg-model') as HTMLInputElement;
-  const prompt = wrap.querySelector('#pg-prompt') as HTMLTextAreaElement;
-  const result = wrap.querySelector('#pg-result')!;
-
-  wrap.querySelector('#pg-load')!.addEventListener('click', () => void loadModels(key, model, result));
-  wrap.querySelector('#pg-run')!.addEventListener('click', () => void runChat(key, model, prompt, result));
+  wrap.querySelector('#login-form')!.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void (async () => {
+      const username = (wrap.querySelector('#login-user') as HTMLInputElement).value.trim();
+      const password = (wrap.querySelector('#login-pass') as HTMLInputElement).value;
+      const response = await adminFetch('/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+      if (!response.ok) {
+        const error = wrap.querySelector('#login-error') as HTMLElement;
+        error.hidden = false;
+        error.textContent = 'Sign in failed';
+        return;
+      }
+      await render();
+    })();
+  });
   return wrap;
 }
 
-async function loadModels(key: HTMLInputElement, model: HTMLInputElement, result: HTMLElement): Promise<void> {
-  saveKey(key.value);
-  if (!key.value.trim()) {
-    showAlert(result, 'Paste a gateway key first.');
-    return;
-  }
-  try {
-    const response = await fetch(`${ORIGIN}/api/v1/models`, {
-      headers: { Authorization: `Bearer ${key.value.trim()}` },
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      showAlert(result, pretty(text) || response.statusText);
-      return;
-    }
-    const parsed = JSON.parse(text) as { data?: { id?: string }[] };
-    const ids = (parsed.data ?? []).map((row) => row.id).filter((id): id is string => Boolean(id));
-    if (ids.length === 0) {
-      showAlert(result, 'No models returned.');
-      return;
-    }
-    const existing = document.getElementById('pg-model-list');
-    existing?.remove();
-    const list = document.createElement('select');
-    list.id = 'pg-model-list';
-    for (const id of ids) {
-      list.append(el(`<option value="${esc(id)}">${esc(id)}</option>`));
-    }
-    list.addEventListener('change', () => {
-      model.value = list.value;
-    });
-    model.value = ids[0];
-    model.after(list);
-    showAlert(result, `${ids.length} models loaded.`);
-  } catch (error) {
-    showAlert(result, error instanceof Error ? error.message : 'Request failed');
-  }
-}
-
-async function runChat(
-  key: HTMLInputElement,
-  model: HTMLInputElement,
-  prompt: HTMLTextAreaElement,
-  result: HTMLElement,
-): Promise<void> {
-  saveKey(key.value);
-  result.querySelectorAll('.response-meta, pre.response, .alert, #pg-placeholder').forEach((node) => node.remove());
-  if (!key.value.trim() || !model.value.trim() || !prompt.value.trim()) {
-    result.append(el('<div class="alert">Gateway key, model, and prompt are required.</div>'));
-    return;
-  }
-  const started = performance.now();
-  try {
-    const response = await fetch(`${ORIGIN}/api/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key.value.trim()}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model.value.trim(),
-        messages: [{ role: 'user', content: prompt.value.trim() }],
-        max_tokens: 256,
-      }),
-    });
-    const text = await response.text();
-    result.append(meta(response.status, response.ok, performance.now() - started));
-    const pre = document.createElement('pre');
-    pre.className = 'response';
-    pre.textContent = pretty(text) || '(empty body)';
-    result.append(pre);
-  } catch (error) {
-    result.append(el(`<div class="alert">${esc(error instanceof Error ? error.message : 'Request failed')}</div>`));
-  }
+function renderOverview(data: { users: number; requests: number; providersWithKeys: number }): HTMLElement {
+  return el(`
+    <div class="page">
+      <header class="page-head"><h1>Overview</h1></header>
+      <div class="grid-2">
+        <div class="panel"><h2>Users</h2><p>${esc(data.users)}</p></div>
+        <div class="panel"><h2>Requests</h2><p>${esc(data.requests)}</p></div>
+        <div class="panel"><h2>Providers with a key</h2><p>${esc(data.providersWithKeys)}</p></div>
+      </div>
+    </div>
+  `);
 }
 
 function renderEndpoints(): HTMLElement {
   const wrap = el(`
     <div class="page">
-      <div class="grid-2">
-        <div class="panel"><h2>Routes</h2><div id="route-list"></div></div>
-        <div class="panel" id="tester"></div>
-      </div>
+      <header class="page-head"><h1>Endpoints</h1></header>
+      <div class="panel"><div id="route-list"></div></div>
+      <div class="panel" id="tester" hidden></div>
     </div>
   `);
   const list = wrap.querySelector('#route-list')!;
-  const tester = wrap.querySelector('#tester')!;
+  const tester = wrap.querySelector('#tester') as HTMLElement;
   let selected = ROUTES[0];
 
-  const table = el(`
+  list.append(el(`
     <table>
-      <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+      <thead><tr><th>Method</th><th>Endpoint</th><th>Test</th></tr></thead>
       <tbody>
         ${ROUTES.map(
           (item) => `
-          <tr class="endpoint-row" role="button" tabindex="0" data-id="${esc(item.id)}">
+          <tr>
             <td><span class="badge">${esc(item.method)}</span></td>
             <td class="mono">${esc(ORIGIN + item.path)}</td>
-            <td class="muted">${esc(item.summary)}</td>
+            <td><button type="button" class="secondary small" data-id="${esc(item.id)}">Test</button></td>
           </tr>`,
         ).join('')}
       </tbody>
     </table>
-  `);
-  list.append(table);
+  `));
 
   function draw(): void {
+    tester.hidden = false;
     const needsKey = selected.path !== '/health';
     const hasBody = selected.method !== 'GET';
     tester.innerHTML = `
-      <h2>Try it</h2>
+      <h2>Test</h2>
       <p class="muted">${esc(selected.summary)}</p>
       <div class="field-row">
         <span class="badge">${esc(selected.method)}</span>
@@ -327,29 +320,270 @@ function renderEndpoints(): HTMLElement {
   }
 
   list.addEventListener('click', (event) => {
-    const id = (event.target as HTMLElement).closest<HTMLElement>('.endpoint-row')?.dataset.id;
+    const id = (event.target as HTMLElement).closest<HTMLElement>('button')?.dataset.id;
     const next = ROUTES.find((item) => item.id === id);
     if (!next) return;
     selected = next;
-    for (const row of list.querySelectorAll<HTMLElement>('.endpoint-row')) {
-      row.classList.toggle('selected', row.dataset.id === id);
-    }
     draw();
   });
-
-  draw();
   return wrap;
+}
+
+interface ModelRow {
+  provider: string;
+  model: string;
+  inputToken: string | null;
+  inputCacheToken: string | null;
+  outputToken: string | null;
+  outputCacheToken: string | null;
+  free: boolean;
+}
+
+interface KeyStatus {
+  id: string;
+  label: string;
+  source: string;
+  maskedKey?: string;
+}
+
+async function renderProviders(): Promise<HTMLElement> {
+  const keys = (await (await adminFetch('/provider-keys')).json()) as KeyStatus[];
+  const models = ((await (await adminFetch('/models')).json()) as { rows: ModelRow[] }).rows;
+  const wrap = el(`
+    <div class="page">
+      <header class="page-head"><h1>Providers</h1></header>
+      <div class="panel" id="key-panel">
+        <h2>API keys</h2>
+        ${keys
+          .map(
+            (key) => `
+          <label for="key-${esc(key.id)}">${esc(key.label)} <span class="muted">${esc(key.maskedKey ?? 'not set')} (${esc(key.source)})</span></label>
+          <div class="field-row">
+            <input id="key-${esc(key.id)}" class="mono" type="password" autocomplete="off" placeholder="Paste key to replace" />
+            <button type="button" data-save="${esc(key.id)}">Save</button>
+          </div>`,
+          )
+          .join('')}
+        <p class="muted" id="key-note"></p>
+      </div>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Provider</th><th>Model</th><th>Price</th><th>Input</th><th>Output</th><th>Free</th></tr></thead>
+          <tbody>
+            ${
+              models.length
+                ? models
+                    .map(
+                      (row) => `<tr>
+                <td>${esc(row.provider)}</td>
+                <td class="mono">${esc(row.model)}</td>
+                <td class="mono">${esc(row.inputToken ? `$${(Number(row.inputToken) * 1000).toFixed(4)}` : '—')}</td>
+                <td class="mono">${esc(priceCell(row.inputToken, row.inputCacheToken))}</td>
+                <td class="mono">${esc(priceCell(row.outputToken, row.outputCacheToken))}</td>
+                <td>${row.free ? 'Yes' : 'No'}</td>
+              </tr>`,
+                    )
+                    .join('')
+                : '<tr><td colspan="6" class="muted">No models. Save a provider key first.</td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `);
+  wrap.querySelector('#key-panel')!.addEventListener('click', (event) => {
+    const id = (event.target as HTMLElement).closest<HTMLElement>('button')?.dataset.save;
+    if (!id) return;
+    const input = wrap.querySelector(`#key-${CSS.escape(id)}`) as HTMLInputElement;
+    void (async () => {
+      const response = await adminFetch(`/provider-keys/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ apiKey: input.value }),
+      });
+      const note = wrap.querySelector('#key-note')!;
+      note.textContent = response.ok ? 'Saved. Reload to refresh the model grid.' : 'Save failed';
+    })();
+  });
+  return wrap;
+}
+
+interface UserRow {
+  username: string;
+  fullName: string;
+  email: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  enabled: boolean;
+}
+
+async function renderUsers(): Promise<HTMLElement> {
+  const data = (await (await adminFetch('/users')).json()) as { users: UserRow[] };
+  const wrap = el(`
+    <div class="page">
+      <header class="page-head"><h1>Users</h1></header>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Username</th><th>Full name</th><th>Email</th><th>Call</th><th>Usage</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${data.users
+              .map(
+                (user) => `<tr>
+              <td class="mono">${esc(user.username)}</td>
+              <td>${esc(user.fullName)}</td>
+              <td>${esc(user.email)}</td>
+              <td>${esc(user.calls)}</td>
+              <td class="mono">${esc(`${((user.promptTokens + user.completionTokens) / 1000).toFixed(1)}k`)}</td>
+              <td class="logs-actions">
+                <button type="button" class="secondary small" data-act="toggle" data-user="${esc(user.username)}" data-enabled="${user.enabled ? '1' : '0'}">${user.enabled ? 'Disable' : 'Enable'}</button>
+                <a class="secondary small" href="#/logs?username=${encodeURIComponent(user.username)}">Logs</a>
+                <button type="button" class="secondary small" data-act="key" data-user="${esc(user.username)}">API key</button>
+                <button type="button" class="secondary small" data-act="models" data-user="${esc(user.username)}">Models</button>
+                <button type="button" class="secondary small" data-act="password" data-user="${esc(user.username)}">Reset password</button>
+                <button type="button" class="secondary small" data-act="delete" data-user="${esc(user.username)}">Delete</button>
+              </td>
+            </tr>`,
+              )
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel" id="user-extra" hidden></div>
+    </div>
+  `);
+  const extra = wrap.querySelector('#user-extra') as HTMLElement;
+  wrap.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-act]');
+    if (!button) return;
+    const username = button.dataset.user!;
+    const act = button.dataset.act;
+    void (async () => {
+      if (act === 'toggle') {
+        await adminFetch(`/users/${encodeURIComponent(username)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ enabled: button.dataset.enabled !== '1' }),
+        });
+        await render();
+        return;
+      }
+      if (act === 'delete') {
+        if (!confirm(`Delete ${username}?`)) return;
+        await adminFetch(`/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+        await render();
+        return;
+      }
+      if (act === 'password') {
+        const password = prompt(`New password for ${username} (min 8 characters)`);
+        if (!password) return;
+        const response = await adminFetch(`/users/${encodeURIComponent(username)}/password`, {
+          method: 'POST',
+          body: JSON.stringify({ password }),
+        });
+        extra.hidden = false;
+        extra.textContent = response.ok ? 'Password updated.' : 'Password rejected.';
+        return;
+      }
+      if (act === 'key') {
+        const response = await adminFetch(`/users/${encodeURIComponent(username)}/api-key`, { method: 'POST' });
+        const body = (await response.json()) as { gatewayApiKey?: string };
+        extra.hidden = false;
+        extra.textContent = body.gatewayApiKey ? `New key for ${username}: ${body.gatewayApiKey}` : 'Key rotation failed.';
+        return;
+      }
+      if (act === 'models') {
+        const catalog = ((await (await adminFetch('/models')).json()) as { rows: ModelRow[] }).rows;
+        const granted = new Set(
+          ((await (await adminFetch(`/users/${encodeURIComponent(username)}/models`)).json()) as { modelIds: string[] })
+            .modelIds,
+        );
+        extra.hidden = false;
+        extra.innerHTML = `
+          <h2>Models for ${esc(username)}</h2>
+          ${
+            catalog.length
+              ? catalog
+                  .map(
+                    (row) =>
+                      `<label><input type="checkbox" value="${esc(row.model)}" ${granted.has(row.model) ? 'checked' : ''}/> ${esc(row.model)}</label>`,
+                  )
+                  .join('<br/>')
+              : '<p class="muted">No catalog models. Add a provider key first.</p>'
+          }
+          <div><button type="button" id="save-models">Save</button></div>
+        `;
+        extra.querySelector('#save-models')?.addEventListener('click', () => {
+          const modelIds = [...extra.querySelectorAll<HTMLInputElement>('input[type=checkbox]:checked')].map(
+            (box) => box.value,
+          );
+          void adminFetch(`/users/${encodeURIComponent(username)}/models`, {
+            method: 'PUT',
+            body: JSON.stringify({ modelIds }),
+          }).then(() => {
+            extra.insertAdjacentHTML('beforeend', '<p class="muted">Saved.</p>');
+          });
+        });
+      }
+    })();
+  });
+  return wrap;
+}
+
+async function renderLogs(username: string): Promise<HTMLElement> {
+  const query = username ? `?username=${encodeURIComponent(username)}` : '';
+  const data = (await (
+    await adminFetch(`/logs${query}`)
+  ).json()) as {
+    items: Array<{
+      method: string;
+      endpoint: string;
+      model: string;
+      username: string;
+      ip: string;
+      inputTokens: number;
+      inputCacheTokens: number;
+      outputTokens: number;
+      outputCacheTokens: number;
+      code: number;
+      createdAt: string;
+    }>;
+  };
+  return el(`
+    <div class="page">
+      <header class="page-head"><h1>Logs${username ? ` · ${esc(username)}` : ''}</h1></header>
+      <div class="panel">
+        <table>
+          <thead><tr><th>Method</th><th>Endpoint</th><th>Model</th><th>Username</th><th>IP</th><th>Input</th><th>Output</th><th>Code</th><th>Date time</th></tr></thead>
+          <tbody>
+            ${
+              data.items.length
+                ? data.items
+                    .map(
+                      (row) => `<tr>
+                <td>${esc(row.method)}</td>
+                <td class="mono">${esc(row.endpoint)}</td>
+                <td class="mono">${esc(row.model)}</td>
+                <td>${esc(row.username)}</td>
+                <td class="mono">${esc(row.ip)}</td>
+                <td class="mono">${esc(tokens(row.inputTokens, row.inputCacheTokens))}</td>
+                <td class="mono">${esc(tokens(row.outputTokens, row.outputCacheTokens))}</td>
+                <td>${esc(row.code)}</td>
+                <td class="mono">${esc(stamp(row.createdAt))}</td>
+              </tr>`,
+                    )
+                    .join('')
+                : '<tr><td colspan="9" class="muted">No requests.</td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `);
 }
 
 function meta(status: number, ok: boolean, durationMs: number): HTMLElement {
   return el(
     `<div class="response-meta"><span class="badge ${ok ? 'good' : 'bad'}">${status}</span><span class="muted">${Math.round(durationMs)} ms</span></div>`,
   );
-}
-
-function showAlert(result: HTMLElement, message: string): void {
-  result.querySelectorAll('.response-meta, pre.response, .alert, #pg-placeholder').forEach((node) => node.remove());
-  result.append(el(`<div class="alert">${esc(message)}</div>`));
 }
 
 function pretty(text: string): string {

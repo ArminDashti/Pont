@@ -6,5 +6,9 @@ export default defineConfig({
   server: {
     port: 9881,
     host: '127.0.0.1',
+    proxy: {
+      '/api': 'http://127.0.0.1:9880',
+      '/health': 'http://127.0.0.1:9880',
+    },
   },
 });

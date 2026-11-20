@@ -105,6 +105,21 @@ export class UsersService {
     return user;
   }
 
+  setEnabled(username: string, enabled: boolean): UserRecord {
+    const user = this.users.findByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`Unknown user "${username}"`);
+    }
+    return this.users.update({ ...user, enabled });
+  }
+
+  async resetPassword(username: string, password: string): Promise<void> {
+    if (!this.users.findByUsername(username)) {
+      throw new NotFoundException(`Unknown user "${username}"`);
+    }
+    this.users.setPasswordHash(username, await hashPassword(this.requirePassword(password)));
+  }
+
   async rotateGatewayKey(username: string): Promise<{ gatewayApiKey: string; prefix: string }> {
     const user = this.users.findByUsername(username);
     if (!user) {
