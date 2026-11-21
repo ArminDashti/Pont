@@ -27,4 +27,9 @@ export class UnifiedGatewayController {
   async messages(@Req() req: Request, @Res() res: Response): Promise<void> {
     await this.proxy.proxyRoutedCompletion(req, res, 'messages');
   }
+
+  @Post('messages/count_tokens')
+  async messagesCountTokens(@Req() req: Request, @Res() res: Response): Promise<void> {
+    await this.proxy.proxyRoutedCompletion(req, res, 'messages/count_tokens');
+  }
 }

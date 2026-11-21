@@ -50,6 +50,17 @@ Gateway paths:
 
 The model id prefix picks the provider: `openrouter-…` → OpenRouter, `opencode-…` → OpenCode Go.
 
+### Claude Code (Anthropic Messages API)
+
+Point the Anthropic client at Pont’s Messages endpoint (nginx exposes it as `/v1/messages`; the API path is `/api/v1/messages`):
+
+```bash
+export ANTHROPIC_BASE_URL=https://pont.xaigrok.ir   # or http://127.0.0.1:9880 for local API (no /v1 prefix)
+export ANTHROPIC_API_KEY=<your pont gateway key>      # same as Authorization Bearer pont_sk_…
+```
+
+Use prefixed Pont model ids, e.g. `opencodego-claude-haiku-5-5` or `openrouter-anthropic-claude-3.5-sonnet`. Non-Claude models are translated to OpenAI chat/completions upstream automatically.
+
 - `GET http://localhost:9880/health` — liveness.
 
 ## Docker (local)

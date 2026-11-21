@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { AnthropicToOpenAiStream, anthropicMessageToOpenAiCompletion } from './anthropic-to-openai.js';
-import { isAnthropicModel, openAiChatToAnthropicRequest } from './openai-to-anthropic.js';
+import {
+  AnthropicToOpenAiStream,
+  anthropicMessageToOpenAiCompletion,
+  anthropicRequestToOpenAiChat,
+} from './anthropic-to-openai.js';
+import {
+  OpenAiToAnthropicStream,
+  isAnthropicModel,
+  openAiChatToAnthropicRequest,
+  openAiCompletionToAnthropicMessage,
+} from './openai-to-anthropic.js';
 
 describe('openAiChatToAnthropicRequest', () => {
   it('moves system messages to the top-level system field and defaults max_tokens', () => {
@@ -106,6 +115,107 @@ describe('anthropicMessageToOpenAiCompletion', () => {
       ],
       usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 },
     });
+  });
+});
+
+describe('anthropicRequestToOpenAiChat', () => {
+  it('round-trips a simple user turn through openAiChatToAnthropicRequest', () => {
+    const anthropic = {
+      model: 'opencode-longcat-2.5-preview-free',
+      max_tokens: 200,
+      system: 'Be brief.',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Hi' }] }],
+    };
+  const openai = anthropicRequestToOpenAiChat(anthropic);
+    expect(openai).toMatchObject({
+      model: anthropic.model,
+      max_tokens: 200,
+      messages: [
+        { role: 'system', content: 'Be brief.' },
+        { role: 'user', content: 'Hi' },
+      ],
+    });
+    expect(openAiChatToAnthropicRequest(openai)).toMatchObject({
+      system: 'Be brief.',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Hi' }] }],
+    });
+  });
+
+  it('maps tool_use and tool_result blocks', () => {
+    const openai = anthropicRequestToOpenAiChat({
+      model: 'openrouter-gpt-4o',
+      max_tokens: 100,
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'Weather?' }] },
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'call_1', name: 'weather', input: { city: 'Oslo' } }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'call_1', content: '5C' }],
+        },
+      ],
+    });
+    expect(openai.messages).toEqual([
+      { role: 'user', content: 'Weather?' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'weather', arguments: '{"city":"Oslo"}' } }],
+      },
+      { role: 'tool', tool_call_id: 'call_1', content: '5C' },
+    ]);
+  });
+});
+
+describe('openAiCompletionToAnthropicMessage', () => {
+  it('converts tool_calls to tool_use with usage', () => {
+    const message = openAiCompletionToAnthropicMessage({
+      id: 'chatcmpl-1',
+      model: 'openrouter-gpt-4o',
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'tool_calls',
+          message: {
+            role: 'assistant',
+            content: 'Checking.',
+            tool_calls: [{ id: 'toolu_1', type: 'function', function: { name: 'weather', arguments: '{"city":"Oslo"}' } }],
+          },
+        },
+      ],
+      usage: { prompt_tokens: 9, completion_tokens: 6, total_tokens: 15 },
+    });
+    expect(message).toMatchObject({
+      type: 'message',
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 9, output_tokens: 6 },
+      content: [
+        { type: 'text', text: 'Checking.' },
+        { type: 'tool_use', id: 'toolu_1', name: 'weather', input: { city: 'Oslo' } },
+      ],
+    });
+  });
+});
+
+describe('OpenAiToAnthropicStream', () => {
+  it('converts text deltas into Anthropic SSE events', () => {
+    const converter = new OpenAiToAnthropicStream();
+    const output =
+      converter.feed(
+        [
+          'data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}\n\n',
+          'data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}\n\n',
+          'data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n',
+          'data: [DONE]\n\n',
+        ].join(''),
+      ) + converter.flush();
+
+    expect(output).toContain('event: message_start');
+    expect(output).toContain('"text_delta","text":"Hi"');
+    expect(output).toContain('"stop_reason":"end_turn"');
+    expect(output).toContain('event: message_stop');
   });
 });
 
