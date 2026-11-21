@@ -1,4 +1,4 @@
-import { type JsonObject, asArray, asObject } from './json.js';
+import { type JsonObject, asArray, asObject, isJsonObject } from './json.js';
 
 function finishReason(stopReason: unknown): string {
   switch (stopReason) {
@@ -9,6 +9,149 @@ function finishReason(stopReason: unknown): string {
     default:
       return 'stop';
   }
+}
+
+function textOf(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  return asArray(content)
+    .map((part) => asObject(part))
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text as string)
+    .join('\n');
+}
+
+function convertAnthropicTools(tools: unknown): JsonObject[] | undefined {
+  const converted = asArray(tools).map((tool) => {
+    const item = asObject(tool);
+    return {
+      type: 'function',
+      function: {
+        name: item.name,
+        ...(typeof item.description === 'string' ? { description: item.description } : {}),
+        parameters: isJsonObject(item.input_schema) ? item.input_schema : { type: 'object', properties: {} },
+      },
+    };
+  });
+  return converted.length > 0 ? converted : undefined;
+}
+
+function convertAnthropicToolChoice(choice: unknown): unknown | undefined {
+  if (!isJsonObject(choice)) {
+    return undefined;
+  }
+  if (choice.type === 'auto') {
+    return 'auto';
+  }
+  if (choice.type === 'any') {
+    return 'required';
+  }
+  if (choice.type === 'tool' && typeof choice.name === 'string') {
+    return { type: 'function', function: { name: choice.name } };
+  }
+  return undefined;
+}
+
+/** Converts an Anthropic Messages request into an OpenAI chat/completions request (inverse of openAiChatToAnthropicRequest). */
+export function anthropicRequestToOpenAiChat(body: JsonObject): JsonObject {
+  const messages: JsonObject[] = [];
+  const systemText = textOf(body.system);
+  if (systemText.length > 0) {
+    messages.push({ role: 'system', content: systemText });
+  }
+
+  for (const entry of asArray(body.messages)) {
+    const message = asObject(entry);
+    const blocks = asArray(message.content).map((block) => asObject(block));
+    const openAiParts: JsonObject[] = [];
+    const toolCalls: JsonObject[] = [];
+    const toolResults: JsonObject[] = [];
+
+    for (const block of blocks) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        openAiParts.push({ type: 'text', text: block.text });
+      } else if (block.type === 'image') {
+        const source = asObject(block.source);
+        if (source.type === 'url' && typeof source.url === 'string') {
+          openAiParts.push({ type: 'image_url', image_url: { url: source.url } });
+        } else if (source.type === 'base64' && typeof source.data === 'string') {
+          const media = typeof source.media_type === 'string' ? source.media_type : 'image/jpeg';
+          openAiParts.push({ type: 'image_url', image_url: { url: `data:${media};base64,${source.data}` } });
+        }
+      } else if (block.type === 'tool_use') {
+        toolCalls.push({
+          id: block.id,
+          type: 'function',
+          function: { name: block.name, arguments: JSON.stringify(block.input ?? {}) },
+        });
+      } else if (block.type === 'tool_result') {
+        toolResults.push({
+          role: 'tool',
+          tool_call_id: block.tool_use_id,
+          content: textOf(block.content),
+        });
+      }
+    }
+
+    if (typeof message.content === 'string' && message.content.length > 0) {
+      openAiParts.push({ type: 'text', text: message.content });
+    }
+
+    if (message.role === 'assistant') {
+      const content =
+        openAiParts.length === 0 && toolCalls.length > 0
+          ? null
+          : openAiParts.length === 1 && openAiParts[0].type === 'text'
+            ? openAiParts[0].text
+            : openAiParts.length > 0
+              ? openAiParts
+              : null;
+      const row: JsonObject = { role: 'assistant', content };
+      if (toolCalls.length > 0) {
+        row.tool_calls = toolCalls;
+      }
+      messages.push(row);
+      continue;
+    }
+
+    for (const toolMessage of toolResults) {
+      messages.push(toolMessage);
+    }
+    if (openAiParts.length > 0) {
+      const content =
+        openAiParts.length === 1 && openAiParts[0].type === 'text' ? openAiParts[0].text : openAiParts;
+      messages.push({ role: 'user', content });
+    }
+  }
+
+  const request: JsonObject = {
+    model: body.model,
+    messages,
+    stream: body.stream === true,
+    max_tokens: body.max_tokens,
+  };
+  if (typeof body.temperature === 'number') {
+    request.temperature = body.temperature;
+  }
+  if (typeof body.top_p === 'number') {
+    request.top_p = body.top_p;
+  }
+  const stop = asArray(body.stop_sequences).filter((s) => typeof s === 'string');
+  if (stop.length === 1) {
+    request.stop = stop[0];
+  } else if (stop.length > 1) {
+    request.stop = stop;
+  }
+  const tools = convertAnthropicTools(body.tools);
+  if (tools) {
+    request.tools = tools;
+    const toolChoice = convertAnthropicToolChoice(body.tool_choice);
+    if (toolChoice !== undefined) {
+      request.tool_choice = toolChoice;
+    }
+  }
+  return request;
 }
 
 function usageOf(inputTokens: unknown, outputTokens: unknown): JsonObject {

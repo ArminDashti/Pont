@@ -11,8 +11,17 @@ import { type PontConfig, pontConfigKey } from '../config/pont.config.js';
 import { parsePontModelId, resolveUpstreamModelId } from '../models/pont-model-id.js';
 import { transformModelsListJson } from '../models/transform-models-response.js';
 import { type JsonObject, isJsonObject } from '../opencode-go/anthropic-bridge/json.js';
-import { AnthropicToOpenAiStream, anthropicMessageToOpenAiCompletion } from '../opencode-go/anthropic-bridge/anthropic-to-openai.js';
-import { isAnthropicModel, openAiChatToAnthropicRequest } from '../opencode-go/anthropic-bridge/openai-to-anthropic.js';
+import {
+  AnthropicToOpenAiStream,
+  anthropicMessageToOpenAiCompletion,
+  anthropicRequestToOpenAiChat,
+} from '../opencode-go/anthropic-bridge/anthropic-to-openai.js';
+import {
+  OpenAiToAnthropicStream,
+  isAnthropicModel,
+  openAiChatToAnthropicRequest,
+  openAiCompletionToAnthropicMessage,
+} from '../opencode-go/anthropic-bridge/openai-to-anthropic.js';
 import { stripUnsupportedSampling } from '../opencode-go/sampling.util.js';
 import { openAiChatToResponsesRequest } from '../opencode-go/responses-bridge/openai-to-responses.js';
 import {
@@ -196,23 +205,38 @@ export class ProviderProxyService {
     const openCodeStyle =
       provider.id === 'opencode-go' && upstreamModel ? getOpenCodeGoApiStyle(upstreamModel) : undefined;
     // Claude and several OpenCode Go models are served only as Anthropic Messages; bridge OpenAI-style callers.
-    const bridgedMessages =
+    const upstreamNativeMessages =
       provider.bridgesClaudeToChat &&
-      pathSuffix === 'chat/completions' &&
       isJsonObject(requestBody) &&
       typeof requestBody.model === 'string' &&
       (isAnthropicModel(upstreamModel ?? requestBody.model) || openCodeStyle === 'messages');
+    const bridgedMessages =
+      provider.bridgesClaudeToChat &&
+      pathSuffix === 'chat/completions' &&
+      upstreamNativeMessages;
+    const bridgedAnthropicClient = pathSuffix === 'messages' && !upstreamNativeMessages;
+    if (pathSuffix === 'messages/count_tokens' && !upstreamNativeMessages) {
+      throw new BadRequestException('Token counting requires a Messages-native model (e.g. opencodego-claude-haiku-5-5).');
+    }
     const bridgedResponses =
       provider.id === 'opencode-go' &&
       pathSuffix === 'chat/completions' &&
       isJsonObject(requestBody) &&
       openCodeStyle === 'responses';
-    const upstreamPath = bridgedMessages ? 'messages' : bridgedResponses ? 'responses' : pathSuffix;
+    const upstreamPath = bridgedMessages
+      ? 'messages'
+      : bridgedAnthropicClient
+        ? 'chat/completions'
+        : bridgedResponses
+          ? 'responses'
+          : pathSuffix;
     let upstreamBody: Buffer | undefined = body;
     if (bridgedMessages && isJsonObject(requestBody)) {
       upstreamBody = this.sanitizeUpstreamBody(
         Buffer.from(JSON.stringify(openAiChatToAnthropicRequest(requestBody as JsonObject))),
       );
+    } else if (bridgedAnthropicClient && pathSuffix === 'messages' && isJsonObject(requestBody)) {
+      upstreamBody = Buffer.from(JSON.stringify(anthropicRequestToOpenAiChat(requestBody as JsonObject)));
     } else if (bridgedResponses && isJsonObject(requestBody)) {
       upstreamBody = Buffer.from(JSON.stringify(openAiChatToResponsesRequest(requestBody as JsonObject)));
     } else if (provider.bridgesClaudeToChat) {
@@ -234,16 +258,23 @@ export class ProviderProxyService {
       status = upstream.status;
       const echoSessionId = generated ? sessionId : undefined;
       captured =
-        bridgedMessages && upstream.ok
-          ? await this.pipeBridgedResponse(upstream, res, isJsonObject(requestBody) && requestBody.stream === true, echoSessionId)
-          : bridgedResponses && upstream.ok
-            ? await this.pipeResponsesBridgedResponse(
-                upstream,
-                res,
-                isJsonObject(requestBody) && requestBody.stream === true,
-                echoSessionId,
-              )
-            : await this.pipeUpstreamResponse(upstream, res, echoSessionId);
+        bridgedAnthropicClient && upstream.ok && pathSuffix === 'messages'
+          ? await this.pipeAnthropicClientBridgedResponse(
+              upstream,
+              res,
+              isJsonObject(requestBody) && requestBody.stream === true,
+              echoSessionId,
+            )
+          : bridgedMessages && upstream.ok
+            ? await this.pipeBridgedResponse(upstream, res, isJsonObject(requestBody) && requestBody.stream === true, echoSessionId)
+            : bridgedResponses && upstream.ok
+              ? await this.pipeResponsesBridgedResponse(
+                  upstream,
+                  res,
+                  isJsonObject(requestBody) && requestBody.stream === true,
+                  echoSessionId,
+                )
+              : await this.pipeUpstreamResponse(upstream, res, echoSessionId);
     } finally {
       this.recordCompletion({
         clientApp,
@@ -429,6 +460,74 @@ export class ProviderProxyService {
     try {
       const response: unknown = JSON.parse(raw);
       emit(JSON.stringify(responsesToOpenAiCompletion(response as JsonObject)));
+    } catch {
+      emit(raw);
+    }
+    res.end();
+    return captured;
+  }
+
+  /** OpenAI upstream → Anthropic Messages SSE or JSON for Claude Code and other Anthropic clients. */
+  private async pipeAnthropicClientBridgedResponse(
+    upstream: globalThis.Response,
+    res: Response,
+    stream: boolean,
+    echoSessionId?: string,
+  ): Promise<string> {
+    res.status(upstream.status);
+    res.setHeader('Content-Type', stream ? 'text/event-stream' : 'application/json');
+    if (echoSessionId) {
+      res.setHeader(SESSION_HEADER, echoSessionId);
+    }
+    if (!upstream.body) {
+      res.end();
+      return '';
+    }
+
+    const reader = upstream.body.getReader();
+    res.on('close', () => {
+      void reader.cancel().catch(() => undefined);
+    });
+
+    const decoder = new TextDecoder();
+    let captured = '';
+    const emit = (text: string): void => {
+      if (!text) {
+        return;
+      }
+      if (captured.length < MAX_CAPTURED_CHARS) {
+        captured += text;
+      }
+      res.write(text);
+    };
+
+    if (stream) {
+      const converter = new OpenAiToAnthropicStream();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        emit(converter.feed(decoder.decode(value, { stream: true })));
+      }
+      emit(converter.feed(decoder.decode()));
+      emit(converter.flush());
+      res.end();
+      return captured;
+    }
+
+    let raw = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+    raw += decoder.decode();
+    try {
+      const completion: unknown = JSON.parse(raw);
+      emit(JSON.stringify(openAiCompletionToAnthropicMessage(completion as JsonObject)));
     } catch {
       emit(raw);
     }

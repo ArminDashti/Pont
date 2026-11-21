@@ -9,6 +9,9 @@ export function openCodeGoUpstreamUrl(baseUrl: string, pathSuffix: string, model
   if (pathSuffix === 'models') {
     return buildOpenCodeGoUpstreamUrl(baseUrl, { kind: 'models' });
   }
+  if (pathSuffix === 'messages/count_tokens') {
+    return `${buildOpenCodeGoUpstreamUrl(baseUrl, { kind: 'completion', style: 'messages', model })}/count_tokens`;
+  }
   const fromPath = apiStyleForPath(pathSuffix);
   const style: OpenCodeGoApiStyle =
     fromPath === 'chat' && model

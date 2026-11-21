@@ -186,6 +186,47 @@ describe('ProviderProxyService', () => {
     );
   });
 
+  it('bridges POST /messages to OpenAI chat/completions for non-Messages upstream models', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
+      const rawBody = init?.body;
+      const body = JSON.parse(
+        Buffer.from(rawBody instanceof Uint8Array ? rawBody : Buffer.from(String(rawBody ?? ''))).toString(),
+      ) as { messages: { role: string; content: string }[] };
+      expect(body.messages).toEqual([
+        { role: 'user', content: 'Hello from Claude Code' },
+      ]);
+      return new Response(
+        JSON.stringify({
+          id: 'c1',
+          model: 'gpt-4o',
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'Hi' } }],
+          usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { proxy, eligibleModels } = createProxy();
+    eligibleModels.setEnabled(['openrouter-gpt-4o']);
+    const req = mockRequest(
+      JSON.stringify({
+        model: 'openrouter-gpt-4o',
+        max_tokens: 64,
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello from Claude Code' }] }],
+      }),
+    );
+    req.headers.authorization = 'Bearer pont_sk_test';
+    req.headers['x-api-key'] = 'pont_sk_test';
+    const res = mockResponse();
+    await proxy.proxyRoutedCompletion(req, res, 'messages');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const payload = JSON.parse(res.body.toString()) as { type: string; content: { text: string }[] };
+    expect(payload).toMatchObject({ type: 'message', content: [{ type: 'text', text: 'Hi' }] });
+  });
+
   it('rejects OpenRouter models until an admin enables them', async () => {
     const { proxy } = createProxy();
     const req = mockRequest(JSON.stringify({ model: 'openrouter-gpt-4o', messages: [] }));
